@@ -142,3 +142,113 @@ class ThreatLookup:
             }
         except Exception as e:
             return {"error": str(e)}
+
+
+class GeoIPLookup:
+    """Query ip-api.com for geolocation and reverse DNS information"""
+    
+    HIGH_RISK_COUNTRIES = {
+        "CN": "China",
+        "RU": "Russia",
+        "IR": "Iran",
+        "KP": "North Korea",
+        "SY": "Syria",
+    }
+    
+    def __init__(self):
+        self.base_url = "http://ip-api.com/json"
+        self.cache = {}
+    
+    def lookup(self, ip: str) -> dict:
+        """
+        Lookup geolocation data for an IP address.
+        Returns country, city, ISP, organization, and risk assessment.
+        """
+        if ip in self.cache:
+            return self.cache[ip]
+        
+        # Skip private IPs (localhost, 192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+        if self._is_private_ip(ip):
+            result = {
+                "ip": ip,
+                "country": "Private Network",
+                "country_code": "PRIVATE",
+                "city": "N/A",
+                "isp": "N/A",
+                "org": "N/A",
+                "is_high_risk": False,
+                "is_private": True,
+                "latitude": None,
+                "longitude": None,
+            }
+            self.cache[ip] = result
+            return result
+        
+        try:
+            params = {
+                "query": ip,
+                "fields": "status,country,countryCode,city,isp,org,lat,lon,reverse"
+            }
+            response = requests.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") == "fail":
+                return {"error": f"Could not lookup IP: {ip}"}
+            
+            country_code = data.get("countryCode", "")
+            is_high_risk = country_code in self.HIGH_RISK_COUNTRIES
+            
+            result = {
+                "ip": ip,
+                "country": data.get("country", "Unknown"),
+                "country_code": country_code,
+                "city": data.get("city", "Unknown"),
+                "isp": data.get("isp", "Unknown"),
+                "org": data.get("org", "Unknown"),
+                "is_high_risk": is_high_risk,
+                "is_private": False,
+                "latitude": data.get("lat"),
+                "longitude": data.get("lon"),
+                "reverse_dns": data.get("reverse", "N/A"),
+            }
+            
+            self.cache[ip] = result
+            return result
+            
+        except Exception as e:
+            console.print(f"[dim]GeoIP lookup error for '{ip}': {e}[/dim]")
+            return {"error": str(e), "ip": ip}
+    
+    def _is_private_ip(self, ip: str) -> bool:
+        """Check if IP is in private/reserved ranges"""
+        try:
+            parts = [int(x) for x in ip.split(".")]
+            if len(parts) != 4:
+                return False
+            
+            # Localhost
+            if parts[0] == 127:
+                return True
+            # Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+            if parts[0] == 10:
+                return True
+            if parts[0] == 172 and 16 <= parts[1] <= 31:
+                return True
+            if parts[0] == 192 and parts[1] == 168:
+                return True
+            # Link-local: 169.254.0.0/16
+            if parts[0] == 169 and parts[1] == 254:
+                return True
+            
+            return False
+        except:
+            return False
+    
+    def reverse_dns(self, ip: str) -> str:
+        """Get reverse DNS name for IP"""
+        try:
+            import socket
+            return socket.gethostbyaddr(ip)[0]
+        except:
+            return "N/A"

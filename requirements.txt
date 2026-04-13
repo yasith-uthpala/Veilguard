@@ -5,3 +5,5 @@ colorama==0.4.6
 rich==13.7.0
 sqlite3-api==2.0.1
 python-dotenv==1.0.0
+fpdf2==2.8.7
+schedule==1.2.2

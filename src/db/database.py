@@ -31,6 +31,10 @@ class Database:
                     product     TEXT,
                     is_vulnerable INTEGER,
                     vuln_reason TEXT,
+                    country     TEXT,
+                    city        TEXT,
+                    isp         TEXT,
+                    is_high_risk INTEGER,
                     scanned_at  TEXT
                 )
             """)
@@ -43,12 +47,16 @@ class Database:
                 conn.execute("""
                     INSERT INTO scans
                     (target, ip, hostname, port, proto, state, service,
-                     product, is_vulnerable, vuln_reason, scanned_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                     product, is_vulnerable, vuln_reason, country, city, isp, 
+                     is_high_risk, scanned_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     r["target"], r["ip"], r["hostname"], r["port"],
                     r["proto"], r["state"], r["service"], r["product"],
-                    int(r["is_vulnerable"]), r["vuln_reason"], r["scanned_at"]
+                    int(r["is_vulnerable"]), r["vuln_reason"],
+                    r.get("country", "N/A"), r.get("city", "N/A"), 
+                    r.get("isp", "N/A"), int(r.get("is_high_risk", 0)), 
+                    r["scanned_at"]
                 ))
             conn.commit()
 

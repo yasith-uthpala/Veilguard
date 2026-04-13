@@ -7,7 +7,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.columns import Columns
 from rich import box
-from .threat_lookup import ThreatLookup, CVELookup
+from .threat_lookup import ThreatLookup, CVELookup, GeoIPLookup
+from .report_generator import ReportGenerator
 
 console = Console()
 
@@ -224,14 +225,17 @@ class PortScanner:
         self.nm     = nmap.PortScanner()
         self.threat = ThreatLookup()
         self.cve_lookup = CVELookup()
+        self.geoip_lookup = GeoIPLookup()
 
     def resolve_host(self):
         try:
             ip       = socket.gethostbyname(self.target)
             hostname = socket.getfqdn(self.target)
-            return ip, hostname
+            # Lookup geolocation data
+            geoip_data = self.geoip_lookup.lookup(ip)
+            return ip, hostname, geoip_data
         except socket.gaierror:
-            return None, None
+            return None, None, {}
 
     # ── Phase 1: fast sweep — find open ports only ──────────────────────
     def fast_sweep(self, ip: str) -> list:
@@ -305,8 +309,16 @@ class PortScanner:
                     })
 
         return results
+    
+    def add_geolocation_data(self, results: list, geoip_data: dict) -> list:
+        """Add geolocation data to all results"""
+        for result in results:
+            result["country"] = geoip_data.get("country", "N/A")
+            result["city"] = geoip_data.get("city", "N/A")
+            result["isp"] = geoip_data.get("isp", "N/A")
+            result["is_high_risk"] = geoip_data.get("is_high_risk", False)
+        return results
 
-    # ── Enrich results with CVE data ──────────────────────────────────
     def enrich_with_cves(self, results: list) -> list:
         """Query NVD for CVEs related to discovered services"""
         console.print("\n[dim]Enriching results with CVE data...[/dim]")
@@ -441,12 +453,27 @@ class PortScanner:
         console.print(table)
 
     def scan(self, port_range=None):
-        ip, hostname = self.resolve_host()
+        ip, hostname, geoip_data = self.resolve_host()
         if not ip:
             console.print(f"[red]Could not resolve host: {self.target}[/red]")
             return []
 
-        console.print(f"[dim]Resolved → IP: {ip}  |  Hostname: {hostname}[/dim]\n")
+        # Store geoip data for later use
+        self.current_geoip_data = geoip_data
+
+        # Display geolocation info
+        console.print(f"[dim]Resolved → IP: {ip}  |  Hostname: {hostname}[/dim]")
+        if geoip_data and "error" not in geoip_data:
+            if geoip_data.get("is_private"):
+                console.print(f"[dim]Location: {geoip_data['country']} (Private Network)[/dim]")
+            else:
+                risk_indicator = " [red]⚠️  HIGH RISK[/red]" if geoip_data.get("is_high_risk") else ""
+                console.print(
+                    f"[dim]Location: {geoip_data.get('city', 'N/A')}, "
+                    f"{geoip_data.get('country', 'N/A')} | "
+                    f"ISP: {geoip_data.get('isp', 'N/A')}{risk_indicator}[/dim]"
+                )
+        console.print()
 
         # Choose scan mode
         if port_range:
@@ -474,6 +501,8 @@ class PortScanner:
                             "target": self.target,
                             "scanned_at": datetime.datetime.now().isoformat(),
                         })
+            # Add geolocation data to all results
+            results = self.add_geolocation_data(results, self.current_geoip_data)
             return results
         else:
             # Full 2-phase scan
@@ -481,7 +510,10 @@ class PortScanner:
             if not open_ports:
                 console.print("[green]No open ports found on this host.[/green]")
                 return []
-            return self.deep_scan(ip, open_ports)
+            results = self.deep_scan(ip, open_ports)
+            # Add geolocation data to all results
+            results = self.add_geolocation_data(results, self.current_geoip_data)
+            return results
 
     def run(self):
         console.print(f"\n[bold purple]Veilguard Port Scanner[/bold purple] — {self.target}\n")
@@ -513,5 +545,25 @@ class PortScanner:
         if self.db and results:
             self.db.save_scan(results)
             console.print("\n[dim]Results saved to database.[/dim]")
+        
+        # Offer export options
+        if results:
+            console.print("\n[bold]Export results?[/bold]")
+            console.print("  [cyan]1[/cyan] — Export as JSON")
+            console.print("  [cyan]2[/cyan] — Export as PDF")
+            console.print("  [cyan]3[/cyan] — Export both (JSON + PDF)")
+            console.print("  [cyan]q[/cyan] — Skip export")
+            
+            export_choice = input("\n> ").strip().lower()
+            
+            if export_choice in ["1", "2", "3", "q"]:
+                reporter = ReportGenerator(self.target)
+                
+                if export_choice == "1":
+                    reporter.export_json(results, self.current_geoip_data)
+                elif export_choice == "2":
+                    reporter.export_pdf(results, self.current_geoip_data)
+                elif export_choice == "3":
+                    reporter.export_both(results, self.current_geoip_data)
 
         return results
