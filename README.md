@@ -51,7 +51,7 @@ Veilguard is a lightweight, open-source security suite that gives you full visib
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/veilguard.git
+git clone https://github.com/yasith-uthpala/veilguard.git
 cd veilguard
 
 # Install Python dependencies
