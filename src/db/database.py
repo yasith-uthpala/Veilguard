@@ -38,6 +38,23 @@ class Database:
                     scanned_at  TEXT
                 )
             """)
+            
+            # Add missing columns if they don't exist
+            cursor = conn.execute("PRAGMA table_info(scans)")
+            columns = {row[1] for row in cursor.fetchall()}
+            
+            new_columns = {
+                'country': 'TEXT',
+                'city': 'TEXT',
+                'isp': 'TEXT',
+                'is_high_risk': 'INTEGER'
+            }
+            
+            for col_name, col_type in new_columns.items():
+                if col_name not in columns:
+                    conn.execute(f"ALTER TABLE scans ADD COLUMN {col_name} {col_type}")
+                    console.print(f"[dim]Added column: {col_name}[/dim]")
+            
             conn.commit()
         console.print("[dim]Database ready.[/dim]")
 
