@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Veilguard
+.env
+veilguard.db
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
