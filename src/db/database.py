@@ -55,6 +55,47 @@ class Database:
                     conn.execute(f"ALTER TABLE scans ADD COLUMN {col_name} {col_type}")
                     console.print(f"[dim]Added column: {col_name}[/dim]")
             
+            # Website monitoring tables
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS website_visits (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain          TEXT,
+                    timestamp       TEXT,
+                    ip_address      TEXT,
+                    port            INTEGER,
+                    pid             INTEGER,
+                    process_name    TEXT,
+                    is_https        INTEGER,
+                    is_blocked      INTEGER,
+                    threat_type     TEXT,
+                    threat_level    TEXT
+                )
+            """)
+            
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS blocked_sites (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain          TEXT UNIQUE,
+                    threat_type     TEXT,
+                    threat_level    TEXT,
+                    reason          TEXT,
+                    added_at        TEXT
+                )
+            """)
+            
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS website_alerts (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain          TEXT,
+                    threat_type     TEXT,
+                    threat_level    TEXT,
+                    details         TEXT,
+                    pid             INTEGER,
+                    process_name    TEXT,
+                    alert_time      TEXT
+                )
+            """)
+            
             conn.commit()
         console.print("[dim]Database ready.[/dim]")
 
