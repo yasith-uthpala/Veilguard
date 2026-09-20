@@ -10,8 +10,10 @@ class TestPortScanner(unittest.TestCase):
 
     def test_resolve_localhost(self):
         scanner = PortScanner("localhost")
-        ip, hostname = scanner.resolve_host()
+        ip, hostname, geoip_data = scanner.resolve_host()
         self.assertEqual(ip, "127.0.0.1")
+        self.assertIsNotNone(hostname)
+        self.assertTrue(geoip_data.get("is_private", False))
 
     def test_scan_returns_list(self):
         scanner = PortScanner("127.0.0.1")

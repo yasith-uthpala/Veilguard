@@ -22,54 +22,10 @@ try:
 except ImportError:
     _TI_AVAILABLE = False
 
-
-# ---------------------------------------------------------------------------
-# Minimal notifier — no separate file needed
-# ---------------------------------------------------------------------------
-class _Notifier:
-    COOLDOWN = 60
-
-    def __init__(self):
-        self._sent  = {}
-        self._lock  = threading.Lock()
-        self._back  = self._detect()
-
-    def _detect(self):
-        try:
-            import plyer; return "plyer"        # noqa: F401, E702
-        except ImportError:
-            pass
-        try:
-            import win10toast; return "win10"   # noqa: F401, E702
-        except ImportError:
-            pass
-        return None
-
-    def send(self, title: str, message: str, key: str):
-        with self._lock:
-            now = time.time()
-            if now - self._sent.get(key, 0) < self.COOLDOWN:
-                return
-            self._sent[key] = now
-        threading.Thread(target=self._fire, args=(title, message), daemon=True).start()
-
-    def _fire(self, title, message):
-        if self._back == "plyer":
-            try:
-                from plyer import notification
-                notification.notify(title=title, message=message,
-                                    app_name="Veilguard", timeout=7)
-            except Exception:
-                pass
-        elif self._back == "win10":
-            try:
-                from win10toast import ToastNotifier
-                ToastNotifier().show_toast(title, message, duration=7, threaded=True)
-            except Exception:
-                pass
-
-
-_notifier = _Notifier()
+try:
+    from src.monitor.notifier import notifier as _notifier
+except ImportError:
+    from monitor.notifier import notifier as _notifier
 
 
 # ---------------------------------------------------------------------------
@@ -102,8 +58,10 @@ class NetworkMonitorUI:
       3. Toast notifications — fires on malicious IP / high-risk country / spike
     """
 
-    def __init__(self, monitor):
+    def __init__(self, monitor, refresh_interval: int = 2):
         self.monitor = monitor
+        self.refresh_interval = refresh_interval
+        self.console = console
 
         if _TI_AVAILABLE:
             self.vt    = ThreatLookup()
@@ -433,3 +391,116 @@ class NetworkMonitorUI:
                 mb = total_bytes / (1024 * 1024)
                 table.add_row(str(pid), name, f"{mb:.2f} MB")
             console.print(table)
+
+    def _format_uptime(self, uptime: float) -> str:
+        """Format uptime into human-readable string."""
+        if uptime < 60:
+            return f"{uptime:.1f}s"
+        m, s = divmod(int(uptime), 60)
+        return f"{m}m {s}s"
+
+    def _create_stats_panel(self):
+        """Create Rich Panel displaying monitoring statistics."""
+        stats = self.monitor.get_live_stats()
+        stat_text = (
+            f"  Total Processes:  {stats.get('total_processes_monitored', 0)}\n"
+            f"  Total Packets:    {stats.get('packet_count', 0)}\n"
+            f"  Total Alerts:     {len(stats.get('recent_alerts', []))}\n"
+            f"  Capture Duration: {self._format_uptime(stats.get('uptime', 0))}\n"
+            f"  IPs geo-resolved: {len(self._geo_done)}\n"
+        )
+        if self.vt and self.vt.api_key:
+            stat_text += f"  IPs VT-checked:   {len(self._vt_done)}\n"
+        return Panel(stat_text, title="Stats", border_style="blue")
+
+    def _create_bandwidth_table(self):
+        """Create Rich Table displaying top processes by bandwidth."""
+        stats = self.monitor.get_live_stats()
+        table = Table(
+            title="Top Processes by Bandwidth",
+            box=box.ROUNDED, border_style="green"
+        )
+        table.add_column("PID", style="cyan", width=8)
+        table.add_column("Process", style="yellow", width=25)
+        table.add_column("Total", style="green", width=12)
+        table.add_column("Upload", style="blue", width=12)
+        table.add_column("Download", style="magenta", width=12)
+
+        bw = stats.get("bandwidth_data", {})
+        for name, pid, total_bytes in stats.get("top_processes", [])[:10]:
+            proc = bw.get(pid, {})
+            total_mb = total_bytes / (1024 * 1024)
+            up_mb = proc.get("bytes_out", 0) / (1024 * 1024)
+            dn_mb = proc.get("bytes_in", 0) / (1024 * 1024)
+            table.add_row(
+                str(pid), name[:25],
+                f"{total_mb:.2f} MB",
+                f"{up_mb:.2f} MB",
+                f"{dn_mb:.2f} MB",
+            )
+        return table
+
+    def display_alerts_report(self):
+        """Display table of recorded security alerts."""
+        stats = self.monitor.get_live_stats()
+        alerts = stats.get("recent_alerts", [])
+        if not alerts:
+            console.print("[green]No alerts detected during monitoring session.[/green]")
+            return
+
+        at = Table(title="Security & Anomaly Alerts", box=box.ROUNDED, border_style="red")
+        at.add_column("Time", width=10)
+        at.add_column("Severity", width=10)
+        at.add_column("Type", style="red", width=18)
+        at.add_column("Process", width=20)
+        at.add_column("Details", width=45)
+
+        for alert in alerts:
+            def _g(a, k, d="N/A"):
+                return a.get(k, d) if isinstance(a, dict) else getattr(a, k, d)
+
+            ts = _g(alert, "timestamp", None)
+            ts_str = ts.strftime("%H:%M:%S") if hasattr(ts, "strftime") else str(ts or "N/A")
+            sev = str(_g(alert, "severity", "medium")).upper()
+            atype = str(_g(alert, "alert_type", "UNKNOWN"))
+            pname = str(_g(alert, "process_name", "N/A"))
+            details = str(_g(alert, "details", "N/A"))
+
+            sev_color = "red" if sev in ("CRITICAL", "HIGH") else "yellow"
+            at.add_row(ts_str, f"[{sev_color}]{sev}[/{sev_color}]", atype, pname, details)
+
+        console.print(at)
+
+    def display_process_details(self, pid: int):
+        """Display detailed bandwidth and connection info for a specific PID."""
+        proc = self.monitor.get_process_details(pid)
+        if not proc:
+            console.print(f"[yellow]No network activity recorded for PID {pid}[/yellow]")
+            return
+
+        total_mb = proc.get("total_bytes", 0) / (1024 * 1024)
+        up_mb = proc.get("bytes_out", 0) / (1024 * 1024)
+        dn_mb = proc.get("bytes_in", 0) / (1024 * 1024)
+
+        console.print(Panel(
+            f"[bold cyan]Process Details — {proc.get('name', 'Unknown')} (PID: {pid})[/bold cyan]\n"
+            f"Executable: [dim]{proc.get('executable', 'N/A')}[/dim]\n\n"
+            f"Total Transfer: [green]{total_mb:.2f} MB[/green] "
+            f"(Upload: [blue]{up_mb:.2f} MB[/blue], Download: [magenta]{dn_mb:.2f} MB[/magenta])\n"
+            f"Packets: {proc.get('packets_in', 0)} in / {proc.get('packets_out', 0)} out\n"
+            f"Ports Used: {list(proc.get('ports', []))}\n"
+            f"Remote Peers: {len(proc.get('connections', {}))}",
+            border_style="cyan"
+        ))
+
+    def display_simple(self, duration: int = 30):
+        """Run simple timed capture with countdown timer."""
+        console.print(f"[cyan]Capturing traffic for {duration} seconds...[/cyan]")
+        self.monitor.start()
+        try:
+            for remaining in range(duration, 0, -1):
+                time.sleep(1)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Capture interrupted by user.[/yellow]")
+        finally:
+            self.monitor.stop()

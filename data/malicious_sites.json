@@ -1,0 +1,101 @@
+{
+  "whitelist": [
+    "google.com",
+    "www.google.com",
+    "accounts.google.com",
+    "googleapis.com",
+    "gstatic.com",
+    "microsoft.com",
+    "www.microsoft.com",
+    "login.microsoftonline.com",
+    "apple.com",
+    "amazon.com",
+    "github.com",
+    "api.github.com",
+    "cloudflare.com",
+    "wikipedia.org",
+    "reddit.com",
+    "youtube.com",
+    "virustotal.com",
+    "nist.gov",
+    "ip-api.com"
+  ],
+  "blacklist": [
+    "malware-test.com",
+    "phishing-test.org",
+    "evil-c2-botnet.net"
+  ],
+  "threats": {
+    "phishing": {
+      "patterns": [
+        "paypa1",
+        "amazn",
+        "micros0ft",
+        "appl3",
+        "g00gle",
+        "login-verify",
+        "secure-banking",
+        "account-update-security"
+      ],
+      "domains": [
+        "paypa1.com",
+        "amazm.com",
+        "micros0ft.com",
+        "fakepaypal.tk",
+        "phishing-site.xyz",
+        "secure-login-update.com"
+      ]
+    },
+    "malware": {
+      "patterns": [
+        "malware-hub",
+        "trojan-source",
+        "exploit-kit",
+        "ransomware-drop"
+      ],
+      "domains": [
+        "malware-hub.com",
+        "trojan-source.ru",
+        "exploit-kit.xyz",
+        "payload-delivery.cc"
+      ]
+    },
+    "scam": {
+      "patterns": [
+        "free-money",
+        "prize-winner",
+        "nigerian-prince",
+        "claim-reward-now",
+        "crypto-double"
+      ],
+      "domains": [
+        "scam-alert.com",
+        "nigerian-prince.xyz",
+        "free-crypto-giveaway.top"
+      ]
+    },
+    "c2": {
+      "patterns": [
+        "c2-server",
+        "botnet-master",
+        "cobaltstrike-beacon"
+      ],
+      "domains": [
+        "c2-server.ru",
+        "botnet-master.com",
+        "stealth-beacon.org"
+      ]
+    },
+    "ransomware": {
+      "patterns": [
+        "decrypt-files",
+        "ransom-payment",
+        "onion-pay"
+      ],
+      "domains": [
+        "lockbit-portal.cc",
+        "blackcat-recovery.top"
+      ]
+    }
+  }
+}

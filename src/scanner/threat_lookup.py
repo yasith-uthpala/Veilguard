@@ -13,7 +13,11 @@ import requests
 import os
 import time
 import socket
+from dotenv import load_dotenv
 from rich.console import Console
+
+# Load environment variables
+load_dotenv()
 
 console = Console()
 

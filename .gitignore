@@ -214,3 +214,4 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+reports/scan_127_0_0_1_20260904_113636.pdf

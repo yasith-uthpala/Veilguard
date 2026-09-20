@@ -8,11 +8,30 @@ import sys
 import os
 from typing import Optional
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Ensure standard output can handle UTF-8 / emojis on Windows
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
-from monitor.network_monitor import NetworkMonitor
-from monitor.network_monitor_ui import NetworkMonitorUI
+# Add project root to path
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from dotenv import load_dotenv
+load_dotenv()
+
+try:
+    from src.monitor.network_monitor import NetworkMonitor
+    from src.monitor.network_monitor_ui import NetworkMonitorUI
+except ImportError:
+    from monitor.network_monitor import NetworkMonitor
+    from monitor.network_monitor_ui import NetworkMonitorUI
 
 
 class NetworkMonitorCLI:
@@ -24,7 +43,7 @@ class NetworkMonitorCLI:
     def _create_parser(self) -> argparse.ArgumentParser:
         """Create argument parser"""
         parser = argparse.ArgumentParser(
-            description='🔍 Live Network Traffic Monitor - Capture packets and detect data exfiltration',
+            description='Live Network Traffic Monitor - Capture packets and detect data exfiltration',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
 Examples:
@@ -138,7 +157,11 @@ Note: Requires administrator/root privileges for packet capture
         monitor = NetworkMonitor(interface=args.interface, update_interval=args.refresh)
         ui = NetworkMonitorUI(monitor, refresh_interval=args.refresh)
         
-        ui.display_live()
+        monitor.start()
+        try:
+            ui.display_live(update_interval=args.refresh)
+        finally:
+            monitor.stop()
     
     def _run_monitor(self, args) -> None:
         """Run monitoring for specified duration"""

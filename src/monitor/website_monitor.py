@@ -12,11 +12,13 @@ FEATURES:
   - Auto-refreshes threat feeds every 6 hours
 """
 
-from scapy.all import sniff, DNS, DNSQR, IP, TCP
+from scapy.all import sniff, DNS, DNSQR, IP, TCP, get_if_list
+from scapy.arch.windows import get_windows_if_list
 from collections import defaultdict
 import psutil
 import threading
 import time
+import socket
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional, Set
@@ -188,15 +190,25 @@ class ThreatFeedLoader:
         """Load all feeds. Safe to call from a background thread."""
         print("[ThreatFeed] Loading threat intelligence feeds...")
         total = 0
-        new_domains: Dict[str, Tuple[str, str]] = {}
+        # BUG FIX 1: Collect into a temporary dict so we can swap it in under
+        # the lock atomically.  The old code had `new_domains = {}` here and
+        # then called `self.feed_domains.update(new_domains)` at the end —
+        # but the parsers were writing directly to `self.feed_domains`, so
+        # `new_domains` was always empty and the lock-protected update was a
+        # no-op that effectively wiped whatever the parsers had written.
+        tmp_domains: Dict[str, Tuple[str, str]] = {}
 
         for name, feed in self.FEEDS.items():
+            # Temporarily point feed_domains at our temp dict so parsers fill it
+            old = self.feed_domains
+            self.feed_domains = tmp_domains
             count = self.load_feed(name, feed)
+            self.feed_domains = old
             print(f"  [ThreatFeed] {name}: {count} domains loaded")
             total += count
 
         with self._lock:
-            self.feed_domains.update(new_domains)
+            self.feed_domains.update(tmp_domains)
 
         print(f"[ThreatFeed] Total: {total} threat domains loaded\n")
 
@@ -305,7 +317,10 @@ class MaliciousSiteDetector:
         if domain in self.TRUSTED_DOMAINS:
             return True
         parts = domain.split(".")
-        for i in range(1, len(parts) - 1):
+        # BUG FIX 3: Was range(1, len(parts) - 1) which stopped one level too
+        # early — e.g. "accounts.google.com" never matched "google.com".
+        # Must go up to len(parts) so every parent domain is checked.
+        for i in range(1, len(parts)):
             if ".".join(parts[i:]) in self.TRUSTED_DOMAINS:
                 return True
         return False
@@ -356,6 +371,81 @@ class MaliciousSiteDetector:
         return levels.get(threat_type, "medium")
 
 
+def auto_detect_interface():
+    """
+    Automatically find the best network interface for packet capture.
+
+    When multiple active interfaces exist (e.g. WiFi + VPN), we rank them
+    so the most likely internet-facing one wins:
+      Score 3 — name contains "wi-fi" or "wifi" or "wlan"  (wireless first)
+      Score 2 — IP starts with 192.168.x.x or 10.x.x.x and name does NOT
+                contain "vpn", "virtual", "hyper", "wsl", "loopback"
+      Score 1 — any other active interface with real IP and traffic
+    Highest score wins; ties broken by most bytes_sent.
+    """
+    io_counters = psutil.net_io_counters(pernic=True)
+    net_addrs   = psutil.net_if_addrs()
+
+    # Build list of (score, bytes_sent, iface_name) for candidates
+    candidates = []
+
+    for iface_name, addrs in net_addrs.items():
+        for addr in addrs:
+            if addr.family != socket.AF_INET:
+                continue
+            ip = addr.address
+            # Skip loopback, APIPA, unassigned
+            if (ip.startswith("127.")
+                    or ip.startswith("169.254.")
+                    or ip == "0.0.0.0"):
+                continue
+            counters = io_counters.get(iface_name)
+            if not counters or counters.bytes_sent == 0:
+                continue  # No traffic = not the active adapter
+
+            name_lower = iface_name.lower()
+            score = 1
+
+            # Prefer wireless adapters — they carry browser DNS on most laptops
+            if any(w in name_lower for w in ("wi-fi", "wifi", "wlan", "wireless")):
+                score = 3
+            # Prefer local-network IPs on non-virtual adapters
+            elif (ip.startswith("192.168.") or ip.startswith("10.")):
+                if not any(w in name_lower for w in
+                           ("vpn", "virtual", "hyper", "wsl",
+                            "loopback", "tunnel", "pseudo", "tap")):
+                    score = 2
+
+            candidates.append((score, counters.bytes_sent, iface_name))
+
+    if not candidates:
+        return None
+
+    # Pick highest score; break ties by most traffic
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    best_name = candidates[0][2]
+    print(f"[AutoDetect] Candidates: {[(s, n) for s, _, n in candidates]}")
+    print(f"[AutoDetect] Selected: {best_name}")
+
+    # Windows: map friendly name to the NPF GUID Scapy expects
+    try:
+        from scapy.arch.windows import get_windows_if_list
+        for entry in get_windows_if_list():
+            friendly = entry.get("name", "")
+            guid     = entry.get("guid", "")
+            if friendly == best_name and guid:
+                # guid already contains { } e.g. '{4296B961-...}' — strip before building path
+                guid_clean = guid.strip("{}")
+                npf = "\\Device\\NPF_{" + guid_clean + "}"
+                print("[AutoDetect] NPF interface: " + npf)
+                return npf
+    except Exception:
+        pass
+
+    # Linux/macOS: psutil name works directly (eth0, en0, etc.)
+    return best_name
+
+
 class DNSCapture:
     """Captures DNS queries to extract domain names"""
 
@@ -404,7 +494,10 @@ class DNSCapture:
         try:
             if packet.haslayer(DNS):
                 dns_layer = packet[DNS]
-                if dns_layer.opcode == 0 and dns_layer.qdcount > 0:
+                # BUG FIX 4: opcode==0 is true for both queries AND responses.
+                # Must also check qr==0 (QR bit = 0 means query, 1 means response)
+                # to avoid processing DNS response packets as new domain visits.
+                if dns_layer.qr == 0 and dns_layer.opcode == 0 and dns_layer.qdcount > 0:
                     qname = dns_layer.qd.qname
                     if qname:
                         return qname.decode("utf-8", errors="ignore").rstrip(".")
@@ -422,7 +515,17 @@ class DNSCapture:
                 return
 
             src_ip = packet[IP].src
-            src_port = getattr(packet, "sport", None)
+
+            # BUG FIX 2: `getattr(packet, "sport", None)` reads from the top-level
+            # Scapy packet object which is the Ethernet/IP frame — sport lives on
+            # the UDP or TCP layer inside it. This always returned None, so process
+            # attribution never worked and every visit showed "Unknown".
+            from scapy.all import UDP, TCP as ScapyTCP
+            src_port = None
+            if packet.haslayer(UDP):
+                src_port = packet[UDP].sport
+            elif packet.haslayer(ScapyTCP):
+                src_port = packet[ScapyTCP].sport
 
             if src_ip.startswith("127."):
                 return
@@ -465,8 +568,20 @@ class DNSCapture:
             pass
 
     def start_capture(self, interface: Optional[str] = None):
-        """Start capturing DNS packets (UDP + TCP port 53) in background"""
+        """Start capturing DNS packets (UDP + TCP port 53) in background.
+
+        If no interface is given, auto_detect_interface() picks the best one
+        automatically — works on any machine without manual configuration.
+        """
         self.is_capturing = True
+
+        # Auto-detect if caller did not specify an interface
+        if interface is None:
+            interface = auto_detect_interface()
+            if interface:
+                print(f"[DNSCapture] Auto-detected interface: {interface}")
+            else:
+                print("[DNSCapture] Could not auto-detect interface, using Scapy default")
 
         def capture_thread():
             try:

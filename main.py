@@ -1,3 +1,9 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
 from src.scanner.port_scanner import PortScanner
 from src.monitor.process_monitor import ProcessMonitor
 from src.monitor.network_monitor import NetworkMonitor

@@ -132,6 +132,11 @@ class Notifier:
         self._send(title=title, message=message, urgency=urgency,
                    key=key or f"custom:{title}")
 
+    def send(self, title: str, message: str, key: str = "", urgency: str = "normal"):
+        """Generic send method, respecting cooldown."""
+        self._send(title=title, message=message, urgency=urgency,
+                   key=key or f"generic:{title}")
+
     # ── internals ──────────────────────────────────────────────────────────
 
     def _send(self, title: str, message: str, urgency: str, key: str):
