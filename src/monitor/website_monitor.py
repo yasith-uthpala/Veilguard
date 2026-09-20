@@ -340,17 +340,35 @@ class MaliciousSiteDetector:
         if domain_lower in self.blacklist:
             return (False, "blacklisted", "critical")
 
-        # 3. Live threat feeds (URLhaus, PhishTank, Spamhaus, Pi-hole)
+        # 3. High-speed SQLite Threat Intelligence Database (URLhaus, ThreatFox)
+        try:
+            from src.db.database import Database
+            threat_match = Database().lookup_threat(domain_lower)
+            if threat_match:
+                return (False, threat_match.get("threat_type", "malware"), threat_match.get("threat_level", "critical"))
+        except Exception:
+            pass
+
+        # 4. VirusTotal Domain Reputation Cache
+        try:
+            from src.scanner.threat_lookup import ThreatLookup
+            vt = ThreatLookup()
+            if vt.is_domain_malicious(domain_lower):
+                return (False, "malware", "critical")
+        except Exception:
+            pass
+
+        # 5. Live memory threat feeds (fallback)
         is_malicious, threat_type, threat_level = self.feed_loader.check(domain_lower)
         if is_malicious:
             return (False, threat_type, threat_level)
 
-        # 4. Local threat DB — exact domain match
+        # 6. Local threat DB — exact domain match
         for t_type, t_info in self.threat_db.items():
             if domain_lower in [d.lower() for d in t_info.get("domains", [])]:
                 return (False, t_type, self._get_threat_level(t_type))
 
-        # 5. Local threat DB — pattern match (offline fallback only)
+        # 7. Local threat DB — pattern match (offline fallback only)
         for t_type, t_info in self.threat_db.items():
             for pattern in t_info.get("patterns", []):
                 if pattern.lower() in domain_lower:
@@ -457,6 +475,12 @@ class DNSCapture:
         self.threat_detector = MaliciousSiteDetector()
         self._lock = threading.Lock()
 
+        try:
+            from src.monitor.site_blocker import site_blocker
+        except ImportError:
+            from monitor.site_blocker import site_blocker
+        self.site_blocker = site_blocker
+
         self._port_pid_cache: Dict[int, Tuple[int, str]] = {}
         self._cache_last_updated: float = 0
         self._cache_update_interval: float = 2.0
@@ -531,6 +555,25 @@ class DNSCapture:
                 return
 
             is_safe, threat_type, threat_level = self.threat_detector.is_safe(domain)
+
+            # Active Blocking & Notification if malicious site detected
+            if not is_safe:
+                self.site_blocker.block_domain(domain, reason=threat_type or "malicious")
+                try:
+                    from src.monitor.notifier import notifier
+                    notifier.send(
+                        title="Veilguard — Malicious Site Blocked",
+                        message=f"{domain} ({threat_type.upper() if threat_type else 'THREAT'}) blocked",
+                        key=f"block:{domain}",
+                        urgency="critical"
+                    )
+                except Exception:
+                    pass
+                try:
+                    from src.db.database import Database
+                    Database().save_blocked_site(domain, threat_type or "malicious", threat_level, "DNS query detected")
+                except Exception:
+                    pass
 
             pid, process_name = None, "Unknown"
             if src_port:

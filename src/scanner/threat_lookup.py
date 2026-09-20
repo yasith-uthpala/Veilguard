@@ -22,6 +22,7 @@ load_dotenv()
 console = Console()
 
 VIRUSTOTAL_IP_API = "https://www.virustotal.com/api/v3/ip_addresses"
+VIRUSTOTAL_DOMAIN_API = "https://www.virustotal.com/api/v3/domains"
 NVD_API           = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 
@@ -126,6 +127,7 @@ class ThreatLookup:
     def __init__(self):
         self.api_key           = os.getenv("VIRUSTOTAL_API_KEY", "")
         self._cache: dict      = {}           # ip → result dict
+        self._domain_cache: dict = {}         # domain → result dict
         self._last_call: float = 0.0
         self._min_interval     = 15.0         # 4 req/min = 1 per 15 s
 
@@ -213,6 +215,133 @@ class ThreatLookup:
     def is_malicious(self, ip: str) -> bool:
         """Quick boolean check — uses cache, no extra API call if already looked up."""
         cached = self._cache.get(ip)
+        if cached:
+            return cached.get("verdict") in ("malicious", "suspicious")
+        return False
+
+    def lookup_domain(self, domain: str) -> dict:
+        """
+        Look up a domain name on VirusTotal (checks 70+ AV and security engines).
+
+        Returns dict:
+          domain, verdict ('malicious' | 'suspicious' | 'clean'), verdict_label,
+          malicious, suspicious, harmless, undetected, reputation,
+          categories, total_engines, cached
+        On error returns {"error": "...", "domain": domain}
+        """
+        clean_domain = domain.strip().lower()
+        for prefix in ("https://", "http://", "ftp://"):
+            if clean_domain.startswith(prefix):
+                clean_domain = clean_domain[len(prefix):]
+        clean_domain = clean_domain.split("/")[0].split("?")[0].split("#")[0].split(":")[0].rstrip(".")
+
+        if not clean_domain:
+            return {"error": "Invalid domain", "domain": domain}
+
+        if not self.api_key:
+            return {"error": "No VIRUSTOTAL_API_KEY in .env", "domain": clean_domain}
+
+        # Check in-memory cache
+        if clean_domain in self._domain_cache:
+            res = dict(self._domain_cache[clean_domain])
+            res["cached"] = True
+            return res
+
+        # Check SQLite cache if Database module is accessible
+        try:
+            from src.db.database import Database
+            db_cached = Database().get_domain_cache(clean_domain)
+            if db_cached:
+                self._domain_cache[clean_domain] = db_cached
+                db_cached["cached"] = True
+                return db_cached
+        except Exception:
+            pass
+
+        self._rate_limit()
+
+        try:
+            headers = {"x-apikey": self.api_key}
+            response = requests.get(
+                f"{VIRUSTOTAL_DOMAIN_API}/{clean_domain}",
+                headers=headers,
+                timeout=12
+            )
+
+            if response.status_code == 404:
+                result = {
+                    "domain": clean_domain,
+                    "verdict": "clean",
+                    "verdict_label": "Not in VirusTotal (Unseen)",
+                    "malicious": 0,
+                    "suspicious": 0,
+                    "harmless": 0,
+                    "undetected": 0,
+                    "reputation": 0,
+                    "categories": {},
+                    "total_engines": 0,
+                    "cached": False,
+                }
+                self._domain_cache[clean_domain] = result
+                return result
+
+            if response.status_code == 429:
+                return {"error": "VirusTotal rate limit hit — slow down", "domain": clean_domain}
+
+            response.raise_for_status()
+            data = response.json()
+            attrs = data.get("data", {}).get("attributes", {})
+            stats = attrs.get("last_analysis_stats", {})
+
+            malicious = stats.get("malicious", 0)
+            suspicious = stats.get("suspicious", 0)
+            harmless = stats.get("harmless", 0)
+            undetected = stats.get("undetected", 0)
+            reputation = attrs.get("reputation", 0)
+            categories = attrs.get("categories", {})
+            total_engines = sum(stats.values()) or 70
+
+            if malicious >= self.MALICIOUS_THRESHOLD or suspicious >= self.SUSPICIOUS_THRESHOLD:
+                verdict = "malicious"
+                verdict_label = f"MALICIOUS ({malicious} engines)"
+            elif suspicious >= 1 or reputation < -5:
+                verdict = "suspicious"
+                verdict_label = f"SUSPICIOUS ({suspicious} engines)"
+            else:
+                verdict = "clean"
+                verdict_label = "Clean"
+
+            result = {
+                "domain": clean_domain,
+                "verdict": verdict,
+                "verdict_label": verdict_label,
+                "malicious": malicious,
+                "suspicious": suspicious,
+                "harmless": harmless,
+                "undetected": undetected,
+                "reputation": reputation,
+                "categories": categories,
+                "total_engines": total_engines,
+                "cached": False,
+            }
+
+            self._domain_cache[clean_domain] = result
+
+            # Persist to SQLite cache
+            try:
+                from src.db.database import Database
+                Database().save_domain_cache(clean_domain, result)
+            except Exception:
+                pass
+
+            return result
+
+        except Exception as e:
+            return {"error": str(e), "domain": clean_domain}
+
+    def is_domain_malicious(self, domain: str) -> bool:
+        """Quick boolean check for domain — uses cache if available."""
+        cached = self._domain_cache.get(domain.lower())
         if cached:
             return cached.get("verdict") in ("malicious", "suspicious")
         return False
