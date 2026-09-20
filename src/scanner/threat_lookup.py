@@ -23,6 +23,7 @@ console = Console()
 
 VIRUSTOTAL_IP_API = "https://www.virustotal.com/api/v3/ip_addresses"
 VIRUSTOTAL_DOMAIN_API = "https://www.virustotal.com/api/v3/domains"
+VIRUSTOTAL_FILE_API   = "https://www.virustotal.com/api/v3/files"
 NVD_API           = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 
@@ -128,6 +129,7 @@ class ThreatLookup:
         self.api_key           = os.getenv("VIRUSTOTAL_API_KEY", "")
         self._cache: dict      = {}           # ip → result dict
         self._domain_cache: dict = {}         # domain → result dict
+        self._file_cache: dict = {}           # sha256 → result dict
         self._last_call: float = 0.0
         self._min_interval     = 15.0         # 4 req/min = 1 per 15 s
 
@@ -342,6 +344,133 @@ class ThreatLookup:
     def is_domain_malicious(self, domain: str) -> bool:
         """Quick boolean check for domain — uses cache if available."""
         cached = self._domain_cache.get(domain.lower())
+        if cached:
+            return cached.get("verdict") in ("malicious", "suspicious")
+        return False
+
+    def lookup_file_hash(self, sha256: str) -> dict:
+        """
+        Look up a file hash (SHA-256, SHA-1, MD5) on VirusTotal.
+        Uses memory cache and SQLite cache to strictly observe free-tier limits.
+        """
+        if not sha256:
+            return {"error": "No hash provided"}
+
+        clean_hash = sha256.strip().lower()
+
+        # Check in-memory cache
+        if clean_hash in self._file_cache:
+            res = dict(self._file_cache[clean_hash])
+            res["cached"] = True
+            return res
+
+        # Check SQLite cache
+        try:
+            from src.db.database import Database
+            db_cached = Database().get_file_hash_cache(clean_hash)
+            if db_cached:
+                self._file_cache[clean_hash] = db_cached
+                db_cached["cached"] = True
+                return db_cached
+        except Exception:
+            pass
+
+        if not self.api_key:
+            return {
+                "sha256": clean_hash,
+                "verdict": "unknown",
+                "verdict_label": "No API Key configured",
+                "malicious": 0,
+                "suspicious": 0,
+                "total_engines": 0,
+                "threat_label": "",
+                "meaningful_name": "",
+                "cached": False,
+            }
+
+        self._rate_limit()
+
+        try:
+            headers = {"x-apikey": self.api_key}
+            response = requests.get(
+                f"{VIRUSTOTAL_FILE_API}/{clean_hash}",
+                headers=headers,
+                timeout=12
+            )
+
+            if response.status_code == 404:
+                result = {
+                    "sha256": clean_hash,
+                    "verdict": "clean",
+                    "verdict_label": "Not in VirusTotal (Unseen binary)",
+                    "malicious": 0,
+                    "suspicious": 0,
+                    "total_engines": 0,
+                    "threat_label": "",
+                    "meaningful_name": "",
+                    "cached": False,
+                }
+                self._file_cache[clean_hash] = result
+                try:
+                    from src.db.database import Database
+                    Database().save_file_hash_cache(clean_hash, result)
+                except Exception:
+                    pass
+                return result
+
+            if response.status_code == 429:
+                return {"error": "VirusTotal rate limit hit — slow down", "sha256": clean_hash}
+
+            response.raise_for_status()
+            data = response.json()
+            attrs = data.get("data", {}).get("attributes", {})
+            stats = attrs.get("last_analysis_stats", {})
+
+            malicious = stats.get("malicious", 0)
+            suspicious = stats.get("suspicious", 0)
+            total_engines = sum(stats.values()) or 70
+            meaningful_name = attrs.get("meaningful_name", "")
+            threat_class = attrs.get("popular_threat_classification", {})
+            threat_label = threat_class.get("suggested_threat_label", "")
+
+            if malicious >= self.MALICIOUS_THRESHOLD:
+                verdict = "malicious"
+                verdict_label = f"MALICIOUS ({malicious}/{total_engines} engines)"
+            elif suspicious >= self.SUSPICIOUS_THRESHOLD:
+                verdict = "suspicious"
+                verdict_label = f"SUSPICIOUS ({suspicious}/{total_engines} engines)"
+            else:
+                verdict = "clean"
+                verdict_label = f"Clean ({total_engines - malicious - suspicious}/{total_engines})"
+
+            result = {
+                "sha256": clean_hash,
+                "verdict": verdict,
+                "verdict_label": verdict_label,
+                "malicious": malicious,
+                "suspicious": suspicious,
+                "total_engines": total_engines,
+                "threat_label": threat_label,
+                "meaningful_name": meaningful_name,
+                "cached": False,
+            }
+
+            self._file_cache[clean_hash] = result
+
+            try:
+                from src.db.database import Database
+                Database().save_file_hash_cache(clean_hash, result)
+            except Exception:
+                pass
+
+            return result
+
+        except Exception as e:
+            return {"error": str(e), "sha256": clean_hash}
+
+    def is_file_malicious(self, sha256: str) -> bool:
+        """Quick boolean check for file hash — uses cache if available."""
+        cached = self._file_cache.get(sha256.lower())
         if cached:
             return cached.get("verdict") in ("malicious", "suspicious")
         return False

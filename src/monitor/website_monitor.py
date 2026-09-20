@@ -554,9 +554,15 @@ class DNSCapture:
             if src_ip.startswith("127."):
                 return
 
+            pid, process_name = None, "Unknown"
+            if src_port:
+                proc_info = self._get_process_from_port(src_port)
+                if proc_info:
+                    pid, process_name = proc_info
+
             is_safe, threat_type, threat_level = self.threat_detector.is_safe(domain)
 
-            # Active Blocking & Notification if malicious site detected
+            # Active Blocking, Alerting & Coordinator Event Emission if malicious site detected
             if not is_safe:
                 self.site_blocker.block_domain(domain, reason=threat_type or "malicious")
                 try:
@@ -571,15 +577,25 @@ class DNSCapture:
                     pass
                 try:
                     from src.db.database import Database
-                    Database().save_blocked_site(domain, threat_type or "malicious", threat_level, "DNS query detected")
+                    db = Database()
+                    db.save_blocked_site(domain, threat_type or "malicious", threat_level, "DNS query detected")
+                    db.save_website_alert(domain, threat_type or "malicious", threat_level, "Malicious domain queried", pid=pid, process_name=process_name)
                 except Exception:
                     pass
 
-            pid, process_name = None, "Unknown"
-            if src_port:
-                proc_info = self._get_process_from_port(src_port)
-                if proc_info:
-                    pid, process_name = proc_info
+                # Publish to Multi-Agent Coordinator Event Bus
+                try:
+                    from src.coordinator.security_coordinator import security_coordinator
+                    security_coordinator.emit_event("dns_threat", {
+                        "domain": domain,
+                        "threat_type": threat_type,
+                        "threat_level": threat_level,
+                        "pid": pid,
+                        "process_name": process_name,
+                        "remote_ip": src_ip
+                    })
+                except Exception:
+                    pass
 
             visit = DomainVisit(
                 domain=domain,
@@ -593,6 +609,23 @@ class DNSCapture:
                 threat_type=threat_type,
                 threat_level=threat_level,
             )
+
+            # Persist visit to database
+            try:
+                from src.db.database import Database
+                Database().save_website_visit(
+                    domain=domain,
+                    ip_address=src_ip,
+                    port=53,
+                    pid=pid,
+                    process_name=process_name,
+                    is_https=False,
+                    is_blocked=not is_safe,
+                    threat_type=threat_type,
+                    threat_level=threat_level
+                )
+            except Exception:
+                pass
 
             visit_key = f"{domain}_{pid}_{uuid.uuid4().hex[:8]}"
 

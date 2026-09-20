@@ -1,0 +1,1913 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veilguard — Cyber Threat Operations Center</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.02); }
+    }
+    .pulse-badge { animation: pulse-slow 3s infinite ease-in-out; }
+    .glass-card {
+      background: rgba(16, 21, 34, 0.85);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(139, 92, 246, 0.16);
+    }
+    .glass-card:hover {
+      border-color: rgba(139, 92, 246, 0.38);
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.6); }
+
+    /* Plain-English Interactive Tooltip Styling */
+    .tooltip-box {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .tooltip-box .tooltip-text {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+      z-index: 100;
+      width: 250px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      font-size: 11px;
+      line-height: 1.4;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8);
+      white-space: normal;
+      text-transform: none;
+      font-weight: normal;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .tooltip-box:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+      transform: translateX(-50%) translateY(-2px);
+    }
+    .help-icon {
+      cursor: help;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 9999px;
+      background: rgba(139, 92, 246, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+    .help-icon:hover {
+      background: rgba(139, 92, 246, 0.3);
+      color: #e9d5ff;
+    }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-purple-500 selection:text-white">
+
+  <!-- TOP APP BAR -->
+  <header class="border-b border-purple-900/30 bg-[#0d1222]/90 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[1px] shadow-lg shadow-purple-600/30">
+        <div class="w-full h-full bg-[#0d1222] rounded-[11px] flex items-center justify-center">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-purple-300 via-white to-cyan-300 bg-clip-text text-transparent">VEILGUARD</h1>
+          <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">Operations Center</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span id="shieldStatusText" class="text-emerald-400 font-medium">Multi-Agent Guard Active</span>
+          <span class="text-slate-600">•</span>
+          <span id="connStatus" class="text-slate-400 font-mono">Live Telemetry Connected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Risk Bar with Tooltip -->
+    <div class="hidden md:flex items-center gap-4 bg-slate-900/80 px-5 py-2 rounded-xl border border-slate-800">
+      <div class="text-xs flex items-center">
+        <span class="text-slate-400">System Risk:</span>
+        <span id="systemRiskLabel" class="font-bold text-emerald-400 ml-1">0/100 (SECURE)</span>
+        <div class="tooltip-box">
+          <span class="help-icon">?</span>
+          <div class="tooltip-text">
+            <b>System Threat Meter (0–100)</b><br>
+            • <b>0–39 (Secure)</b>: Normal healthy operation.<br>
+            • <b>40–74 (Elevated)</b>: Suspicious app behavior or unusual network ports detected.<br>
+            • <b>75–100 (Critical)</b>: Active malware, hacker connection, or high-volume data theft detected.
+          </div>
+        </div>
+      </div>
+      <div class="w-36 h-2 bg-slate-800 rounded-full overflow-hidden">
+        <div id="systemRiskBar" class="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full w-0 transition-all duration-500"></div>
+      </div>
+      <div class="tooltip-box">
+        <span id="threatIndicatorCount" class="text-[11px] font-mono text-slate-400 cursor-help">57,135 Indicators</span>
+        <div class="tooltip-text">
+          <b>Global Threat Watchlist</b><br>
+          Continuously checks running apps and web links against over 57,000 confirmed malware domains and botnet servers from Abuse.ch.
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Quick Controls -->
+    <div class="flex items-center gap-2.5">
+      <button onclick="openGlossaryModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm">
+        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+        <span>📖 Security Guide & Terms</span>
+      </button>
+      <button onclick="switchTab('scanner')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/30 transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <span>Port Scanner</span>
+      </button>
+      <button onclick="emergencyUnblockAll()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+        Flush DNS & Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WRAPPER: SIDEBAR + CONTENT -->
+  <div class="flex flex-1 overflow-hidden">
+    
+    <!-- SIDE NAVIGATION (ALL MODULES - NO DUPLICATION) -->
+    <aside class="w-64 border-r border-slate-800/80 bg-[#090d16] p-4 flex flex-col justify-between shrink-0">
+      <div class="space-y-1">
+        <div class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Security Modules</div>
+        
+        <button onclick="switchTab('optimizer')" id="tab-btn-optimizer" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition bg-purple-600/20 text-purple-300 border border-purple-500/30">
+          <svg class="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Game Optimizer & Boost
+        </button>
+
+        <button onclick="switchTab('scanner')" id="tab-btn-scanner" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <svg class="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Port Scanner & CVEs
+        </button>
+
+        <button onclick="switchTab('network')" id="tab-btn-network" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          Network Flow & Sockets
+        </button>
+
+        <button onclick="switchTab('dns')" id="tab-btn-dns" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          DNS Shield & Sinkhole
+        </button>
+
+        <button onclick="switchTab('processes')" id="tab-btn-processes" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <svg class="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+          </svg>
+          Process Forensics & Hashes
+        </button>
+
+        <button onclick="switchTab('threats')" id="tab-btn-threats" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Threat Intelligence Studio
+        </button>
+
+        <button onclick="switchTab('history')" id="tab-btn-history" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <svg class="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Unified Logs & History
+        </button>
+      </div>
+
+      <!-- System Status Card in Sidebar -->
+      <div class="glass-card p-3.5 rounded-xl border border-purple-900/30 space-y-2">
+        <div class="text-[11px] font-semibold uppercase text-purple-300 flex items-center justify-between">
+          <span>Active Defenses</span>
+          <span class="text-emerald-400 font-mono">ONLINE</span>
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-400">
+          <div class="flex justify-between"><span>Windows Hosts:</span><span class="text-emerald-400 font-mono">0.0.0.0 Sinkhole</span></div>
+          <div class="flex justify-between"><span>Firewall Rule:</span><span class="text-emerald-400">Netsh AdvFirewall</span></div>
+          <div class="flex justify-between"><span>Abuse.ch Feeds:</span><span id="sidebarThreatCount" class="text-cyan-400 font-mono">57,135</span></div>
+          <div class="flex justify-between"><span>VirusTotal API:</span><span class="text-purple-400">Throttled & Cached</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT VIEW AREA -->
+    <main class="flex-1 overflow-y-auto p-6 space-y-6">
+
+      <!-- TOP METRIC TILES (EXECUTIVE SUMMARY) -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        
+        <div class="glass-card p-4 rounded-2xl border border-slate-800/90 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 flex items-center">
+              Network Speed
+              <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Live Network Flow</b>: Measures real-time upload and download traffic. Helps spot unexpected high-bandwidth data leaks.</span></span>
+            </span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400">LIVE</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="bandwidthRate" class="text-2xl font-bold font-mono text-white">0.0</span>
+            <span class="text-xs text-slate-400">KB/s</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">Packets Handled: <span id="packetCount" class="text-slate-300 font-mono">0</span></p>
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-cyan-500/5 rounded-full blur-xl"></div>
+        </div>
+
+        <div class="glass-card p-4 rounded-2xl border border-slate-800/90 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 flex items-center">
+              App Connections
+              <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Active Sockets</b>: Number of programs that have an open digital pipe to the internet (actively sending or listening for data).</span></span>
+            </span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400">TCP / UDP</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="socketCount" class="text-2xl font-bold font-mono text-white">0</span>
+            <span class="text-xs text-slate-400">connections</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">Monitored in real-time</p>
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-purple-500/5 rounded-full blur-xl"></div>
+        </div>
+
+        <div class="glass-card p-4 rounded-2xl border border-slate-800/90 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 flex items-center">
+              Blocked Dangerous Sites
+              <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Domain Sinkholes</b>: Malicious websites neutralized at the Windows system level so no browser or app can open them.</span></span>
+            </span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400">ENFORCED</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="blockedCount" class="text-2xl font-bold font-mono text-rose-400">0</span>
+            <span class="text-xs text-slate-400">sinkholes</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">Isolated in Windows Hosts</p>
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-rose-500/5 rounded-full blur-xl"></div>
+        </div>
+
+        <div class="glass-card p-4 rounded-2xl border border-slate-800/90 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 flex items-center">
+              Malware Watchlist
+              <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Threat Indicators</b>: Over 57,000 confirmed malware URLs, botnet addresses, and phishing links stored locally for instant blocking.</span></span>
+            </span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">SUB-MS DB</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="tileThreatCount" class="text-2xl font-bold font-mono text-emerald-400">57,135</span>
+            <span class="text-xs text-slate-400">threat rules</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">URLhaus + ThreatFox live cache</p>
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl"></div>
+        </div>
+
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 1: GAME OPTIMIZER & SYSTEM BOOSTER                              -->
+      <!-- =================================================================== -->
+      <div id="view-optimizer" class="space-y-6">
+
+        <!-- HERO GAME BOOST BANNER -->
+        <div id="boostHeroCard" class="glass-card p-6 rounded-3xl border border-purple-500/30 relative overflow-hidden transition-all duration-500 bg-gradient-to-r from-[#121128] via-[#0d1326] to-[#0a1b24]">
+          <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="space-y-2">
+              <div class="flex items-center gap-2">
+                <span id="boostBadge" class="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  Ready to Boost
+                </span>
+                <span id="activeGameBanner" class="hidden text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                  🎮 Game Detected
+                </span>
+              </div>
+              <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                <span>Ultra Game Optimizer</span>
+              </h2>
+              <p class="text-xs text-slate-300 max-w-xl leading-relaxed">
+                Switches Windows to <b class="text-cyan-300">Ultimate/High Performance</b> power mode, deep-purges standby RAM cache, clears DNS routing lag, and mutes background popups for maximum FPS.
+              </p>
+            </div>
+
+            <!-- Boost Toggle Button -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              <button id="boostMainBtn" onclick="toggleGameBoost()" class="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-bold text-sm shadow-xl shadow-purple-600/30 transition transform active:scale-95 flex items-center justify-center gap-2">
+                <span class="text-base">🚀</span>
+                <span id="boostBtnText">Engage Ultra Game Boost</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute right-32 -top-10 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        </div>
+
+        <!-- HARDWARE PERFORMANCE & MEMORY METRICS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          <!-- CPU Live Metric -->
+          <div class="glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                <span>⚡</span> CPU Overhead
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Current processor usage percentage across all system cores. Lower is better for gaming headroom.</span></span>
+              </span>
+              <span id="cpuStatusTag" class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400">OPTIMAL</span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+              <span id="optCpuPercent" class="text-3xl font-black font-mono text-white">0%</span>
+              <span class="text-xs text-slate-400">utilization</span>
+            </div>
+            <div class="mt-3 w-full bg-slate-800/80 rounded-full h-2 overflow-hidden">
+              <div id="optCpuBar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full rounded-full transition-all duration-500" style="width: 10%;"></div>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+              <span>Windows Power Plan:</span>
+              <span id="optPowerPlanLabel" class="text-cyan-300 font-semibold font-mono">High Performance</span>
+            </div>
+          </div>
+
+          <!-- Physical RAM Live Metric -->
+          <div class="glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                <span>🧠</span> Physical RAM Memory
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Available system memory. Games require free RAM to load high-resolution textures without micro-stutters.</span></span>
+              </span>
+              <button onclick="triggerRamClean()" class="text-[11px] font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 bg-purple-600/15 px-2 py-0.5 rounded border border-purple-500/30 transition">
+                <span>⚡ Purge RAM</span>
+              </button>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+              <span id="optRamFree" class="text-3xl font-black font-mono text-white">0.0</span>
+              <span class="text-xs text-slate-400">GB Available</span>
+            </div>
+            <div class="mt-3 w-full bg-slate-800/80 rounded-full h-2 overflow-hidden">
+              <div id="optRamBar" class="bg-gradient-to-r from-purple-500 to-indigo-400 h-full rounded-full transition-all duration-500" style="width: 50%;"></div>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+              <span>Memory In Use:</span>
+              <span id="optRamUsedLabel" class="text-purple-300 font-semibold font-mono">0 GB / 0 GB (0%)</span>
+            </div>
+          </div>
+
+          <!-- Network Latency & Silent Gaming Mode -->
+          <div class="glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                <span>🎮</span> Gaming Environment
+              </span>
+              <span id="silentModeTag" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">DND OFF</span>
+            </div>
+            
+            <div class="mt-3 space-y-2 text-xs">
+              <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <span class="text-slate-300">DNS Route Cache:</span>
+                <button onclick="triggerDnsFlush()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-cyan-600/20 text-cyan-300 border border-slate-700 text-[11px] font-medium transition">
+                  Flush DNS
+                </button>
+              </div>
+              <div class="flex justify-between items-center p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <span class="text-slate-300">Do Not Disturb:</span>
+                <span id="dndStatusText" class="text-slate-400 font-mono text-[11px]">Normal Alerts</span>
+              </div>
+            </div>
+
+            <div class="mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400 flex justify-between">
+              <span>Lifetime RAM Freed:</span>
+              <span id="lifetimeRamFreed" class="text-emerald-400 font-mono font-bold">0 MB</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- OPTIMIZABLE BACKGROUND APPLICATIONS & MEMORY EATERS -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center gap-2">
+                <span>🧹</span> Background Bloatware & RAM Eaters
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Non-essential background programs (browsers, updaters, torrents) consuming significant RAM. Terminate them for higher framerates.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Programs currently consuming physical memory in the background. Close them before gaming to prevent FPS drops.</p>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <button onclick="triggerRamClean()" class="px-3.5 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 text-xs font-semibold transition flex items-center gap-1.5">
+                <span>⚡ Purge RAM Working Sets</span>
+              </button>
+              <button onclick="loadOptimizerApps()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition">
+                Refresh Apps
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-wider font-mono border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-4">PID</th>
+                  <th class="py-3 px-4">Process Name</th>
+                  <th class="py-3 px-4">Memory Consumed</th>
+                  <th class="py-3 px-4">CPU Usage</th>
+                  <th class="py-3 px-4 text-right">Quick Action</th>
+                </tr>
+              </thead>
+              <tbody id="optimizerAppsTableBody" class="divide-y divide-slate-800/50 font-mono">
+                <tr><td colspan="5" class="py-6 text-center text-slate-500">Scanning for background memory eaters...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 2: PORT SCANNER & CVES (NEW)                                   -->
+      <!-- =================================================================== -->
+      <div id="view-scanner" class="hidden space-y-6">
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center">
+                Port Scanner & Known Vulnerabilities (CVE)
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Digital Door Inspector</b>: Scans target IP addresses to see which ports ('doors') are open and whether any software has known security bugs (CVEs).</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Digital Door Inspector — Checks which network doors are open on your device or network, queries NVD for security bugs, and maps server geolocation</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="scanTargetInput" placeholder="Target IP or Hostname (e.g. 127.0.0.1)" value="127.0.0.1" class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-mono w-56">
+              <select id="scanRangeInput" class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-mono">
+                <option value="1-1024">Quick (1–1024 Standard Ports)</option>
+                <option value="common">Common Ports (Top 20)</option>
+                <option value="1-65535">Full (1–65535 Deep Scan)</option>
+              </select>
+              <button id="scanStartBtn" onclick="runPortScan()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md shadow-purple-600/30 flex items-center gap-1.5">
+                <span>Start Scan</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Scan Geolocation Banner -->
+          <div id="scanGeoBanner" class="p-3.5 rounded-xl bg-slate-950/70 border border-purple-900/30 text-xs font-mono hidden mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>Target IP: <span id="geoIp" class="text-cyan-300 font-bold">—</span> • Hostname: <span id="geoHost" class="text-slate-300">—</span></div>
+              <div>Location: <span id="geoLoc" class="text-emerald-300">—</span> • ISP: <span id="geoIsp" class="text-slate-300">—</span></div>
+            </div>
+          </div>
+
+          <!-- Scan Results Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-wider font-mono border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Port (Door #)
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Port Number</b>: Digital channel apps use to communicate (e.g. 80 for Web, 443 for Secure Web, 445 for File Sharing).</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Protocol
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Protocol</b>: TCP (reliable delivery) or UDP (fast streaming/DNS).</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Service (Type)
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Service</b>: The kind of program listening on this port (e.g., HTTP Web Server, SSH, SMB).</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Detected Software
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Product / Version</b>: The exact software name and version detected on this port.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Risk Level
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Risk Level</b>: Safety rating based on how vulnerable this service is if exposed to the public internet.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Known Flaws (CVEs)
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>CVE (Common Vulnerabilities & Exposures)</b>: Publicly recorded security flaws and bugs that attackers could exploit.</span></span>
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="scanResultsBody" class="divide-y divide-slate-800/50 font-mono">
+                <tr><td colspan="6" class="py-8 text-center text-slate-500">Enter a target IP or hostname above and click "Start Scan" to discover open ports and vulnerabilities.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 3: NETWORK FLOW & SOCKETS (DEDICATED)                           -->
+      <!-- =================================================================== -->
+      <div id="view-network" class="hidden space-y-6">
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center">
+                Live Internet Traffic & App Connections (Sockets)
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Network Sockets</b>: Every active digital communication pipe between your programs and external servers.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Shows how fast data is traveling and lists every application currently talking to external servers</p>
+            </div>
+            <button onclick="loadSockets()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700">
+              Refresh Sockets
+            </button>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-wider font-mono border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      PID (App ID)
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Process ID</b>: The unique identification number Windows assigns to each running program.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">App / Process Name</th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Connection State
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Status</b>:<br>• <b>ESTABLISHED</b>: Actively transferring data with a server right now.<br>• <b>LISTEN</b>: Waiting for an outside connection like a server.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">Your Device (Local)</th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Remote Destination
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Remote Address</b>: The external IP address and port that this application is communicating with.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4 text-right">
+                    <span class="flex items-center justify-end">
+                      Safety Flag
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Suspicious Flag</b>: Triggers if a connection uses non-standard ports or known hacker control channels.</span></span>
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="socketsTableBody" class="divide-y divide-slate-800/50 font-mono">
+                <tr><td colspan="6" class="py-6 text-center text-slate-500">Loading active sockets...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 4: DNS SHIELD & SINKHOLE (DEDICATED)                           -->
+      <!-- =================================================================== -->
+      <div id="view-dns" class="hidden space-y-6">
+        
+        <!-- Active Sinkholes -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center">
+                Malicious Website Blocker (0.0.0.0 Sinkhole)
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>System-Level Sinkhole</b>: Reroutes dangerous domains to address 0.0.0.0 (nowhere) inside Windows so browsers and background viruses cannot connect to them.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Blocks dangerous websites, phishing links, and malware servers at the Windows operating system level</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="manualBlockInput" placeholder="Domain to block (e.g. evil.com)..." class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-mono w-60">
+              <button onclick="blockManualDomain()" class="px-3.5 py-1.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 border border-rose-500/30 text-xs font-semibold">Sinkhole</button>
+              <button onclick="emergencyUnblockAll()" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-600/30">
+                Unblock All (Reset)
+              </button>
+            </div>
+          </div>
+
+          <!-- Plain-English Sinkhole Helper Box -->
+          <div class="mb-4 p-3.5 rounded-xl bg-purple-950/30 border border-purple-800/40 text-xs text-purple-200 flex items-start gap-2.5">
+            <span class="text-base">💡</span>
+            <div>
+              <span class="font-semibold text-white">How Domain Sinkholing Works:</span> When a website is added here, Windows immediately cancels any attempt by any browser or software to connect to it. If a safe website was blocked by mistake, click <b class="text-emerald-300">Unblock Domain</b> to restore access immediately.
+            </div>
+          </div>
+
+          <div id="blockedDomainsList" class="space-y-3">
+            <div class="text-xs text-slate-500 italic p-4 text-center">No active website blocks. Hosts file is clean.</div>
+          </div>
+        </div>
+
+        <!-- Live DNS Visits Stream -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-bold text-sm text-white flex items-center">
+                Recent Website Lookups Captured (DNS Stream)
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>DNS Stream</b>: Logs whenever a website name (like google.com) is translated into an IP address by any app on your machine.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Shows which websites your computer is querying and identifies which application made the request</p>
+            </div>
+            <button onclick="loadDnsVisits()" class="text-xs text-purple-400 hover:text-purple-300 font-medium">Refresh Queries</button>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-wider font-mono border-b border-slate-800">
+                <tr>
+                  <th class="py-2.5 px-4">Time</th>
+                  <th class="py-2.5 px-4">
+                    <span class="flex items-center">
+                      Domain Queried (Website)
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">The website domain name requested.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-2.5 px-4">
+                    <span class="flex items-center">
+                      App Responsible (Process)
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">The software application that initiated this web connection.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-2.5 px-4">PID</th>
+                  <th class="py-2.5 px-4 text-right">
+                    <span class="flex items-center justify-end">
+                      Verdict
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Safe = normal website. BLOCKED = recognized malware or phishing site.</span></span>
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="dnsVisitsTableBody" class="divide-y divide-slate-800/50 font-mono">
+                <tr><td colspan="5" class="py-4 text-center text-slate-500">Loading DNS queries...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 5: PROCESS FORENSICS & DEFENSE (DEDICATED)                     -->
+      <!-- =================================================================== -->
+      <div id="view-processes" class="hidden space-y-6">
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center">
+                App Inspector & Anti-Malware Forensics
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Process Defense</b>: Computes cryptographic file fingerprints, tests reputations on VirusTotal, and identifies hacker hiding spots.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Analyzes running software, verifies their unique digital fingerprints (SHA-256), and catches stealthy hacker tricks (LOLBAS anomalies)</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="procInspectInput" placeholder="Enter PID or Name (e.g. python.exe)..." class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-purple-500 w-64 font-mono">
+              <button onclick="inspectTargetProcess()" class="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold">Inspect App</button>
+            </div>
+          </div>
+
+          <!-- Plain-English Process Concepts Guide -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-xs">
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-start gap-2.5">
+              <span class="text-base">🧬</span>
+              <div>
+                <div class="font-semibold text-white">What is a Digital Fingerprint (SHA-256)?</div>
+                <div class="text-slate-400 text-[11px] mt-0.5">Every file has an exact mathematical code. If malware modifies or replaces a trusted application, its fingerprint changes, immediately alerting Veilguard.</div>
+              </div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-start gap-2.5">
+              <span class="text-base">🚨</span>
+              <div>
+                <div class="font-semibold text-white">What is a LOLBAS Anomaly?</div>
+                <div class="text-slate-400 text-[11px] mt-0.5">"Living-off-the-land": When normal apps (like Microsoft Word or Chrome) sneakily launch Command Prompt or PowerShell in the background to run malicious scripts.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Forensic Card Result with Human Recommendations -->
+          <div id="forensicCardResult" class="mb-5 p-5 rounded-xl bg-slate-950/90 border border-purple-900/40 text-xs font-mono hidden">
+            <!-- Actionable Human Recommendation Banner -->
+            <div id="fcRecommendation" class="mb-4 p-3.5 rounded-xl border text-xs font-sans"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <div class="text-purple-300 font-bold text-sm flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span id="fcName">Process</span> (PID: <span id="fcPid">—</span>)
+                </div>
+                <div class="text-slate-400">Executable Location: <span id="fcExe" class="text-slate-200 break-all">—</span></div>
+                <div class="text-slate-400">Parent (Launcher App): <span id="fcParent" class="text-slate-200">—</span></div>
+                <div class="text-slate-400">Memory Usage: <span id="fcMemory" class="text-slate-200">—</span></div>
+                <div class="text-slate-400">Hidden / Temp Directory: <span id="fcPathCheck" class="text-slate-200">—</span></div>
+                <div class="text-slate-400">LOLBAS Anomaly: <span id="fcAnomalyCheck" class="text-slate-200">—</span></div>
+              </div>
+              <div class="space-y-3">
+                <div class="text-slate-400 flex items-center">
+                  Digital Fingerprint (SHA-256 Hash):
+                  <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">64-character unique identity code of this executable file on your hard drive.</span></span>
+                </div>
+                <div id="fcHash" class="text-amber-300 text-[11px] break-all bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                  —
+                </div>
+                <div class="flex items-center gap-3">
+                  <span id="fcVerdict" class="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 font-sans font-medium text-xs">VirusTotal: Clean</span>
+                  <button id="fcKillBtn" onclick="terminateInspectedPid()" class="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold ml-auto">Terminate Process</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Process Forensics Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-wider font-mono border-b border-slate-800">
+                <tr>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      PID
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Process ID: Unique program number.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">App Name</th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Risk
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">0–39 = Normal, 40–74 = Suspicious location/parent, 75–100 = Dangerous.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      SHA-256 Fingerprint
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Cryptographic hash of the executable file.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Parent App
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">The software that originally launched this program.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4">
+                    <span class="flex items-center">
+                      Antivirus Cloud
+                      <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Verdict across 70+ antivirus engines in VirusTotal.</span></span>
+                    </span>
+                  </th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="overviewProcessTable" class="divide-y divide-slate-800/50 font-mono">
+                <tr><td colspan="7" class="py-6 text-center text-slate-500">Loading process forensics...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 6: THREAT INTELLIGENCE STUDIO (DEDICATED)                       -->
+      <!-- =================================================================== -->
+      <div id="view-threats" class="hidden space-y-6">
+        
+        <!-- Live Feed Control -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center">
+                Global Security Watchlists (Abuse.ch & VirusTotal)
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Threat Intelligence</b>: Local high-speed database of confirmed cyber threats updated from global security research institutes.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">High-speed local indexed database of active malware distribution domains, ransomware links, and hacker botnets</p>
+            </div>
+            <button id="syncFeedsBtn" onclick="triggerThreatFeedSync()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md shadow-purple-600/30 flex items-center gap-1.5">
+              <span>Sync Live Feeds Now</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+              <div class="text-slate-400 flex items-center justify-between">
+                <span>URLhaus Malware Feeds:</span>
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Confirmed active websites distributing viruses and malware payloads.</span></span>
+              </div>
+              <div id="urlhausCount" class="text-xl font-bold text-purple-300 mt-1">13,637</div>
+              <div class="text-[11px] text-slate-400">Active virus download sites</div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+              <div class="text-slate-400 flex items-center justify-between">
+                <span>ThreatFox C2 & Botnets:</span>
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Hacker control servers (Command and Control) that botnets listen to for instructions.</span></span>
+              </div>
+              <div id="threatfoxCount" class="text-xl font-bold text-cyan-300 mt-1">43,498</div>
+              <div class="text-[11px] text-slate-400">Hacker Command & Control servers</div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+              <div class="text-slate-400 flex items-center justify-between">
+                <span>VirusTotal Cached Items:</span>
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text">Pre-scanned domains, IPs, and file fingerprints cached locally to save API quota.</span></span>
+              </div>
+              <div id="vtCacheCount" class="text-xl font-bold text-emerald-300 mt-1">0</div>
+              <div class="text-[11px] text-slate-400">Cached multi-engine scans</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Threat Investigator -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <h3 class="font-bold text-base text-white mb-1 flex items-center">
+            On-Demand Threat Investigator
+            <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Investigator</b>: Enter any suspicious website, IP address, or file hash to test it against 70+ top antivirus engines.</span></span>
+          </h3>
+          <p class="text-xs text-slate-400 mb-4">Investigate any custom Domain, IP Address, or SHA-256 File Hash against 70+ Antivirus engines and Abuse.ch</p>
+
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
+              <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="lookupType" value="domain" checked> Website Domain</label>
+              <label class="flex items-center gap-1 cursor-pointer ml-2"><input type="radio" name="lookupType" value="ip"> IP Address</label>
+              <label class="flex items-center gap-1 cursor-pointer ml-2"><input type="radio" name="lookupType" value="file"> File Fingerprint (Hash)</label>
+            </div>
+            <input type="text" id="threatQueryInput" placeholder="Enter target (e.g. github.com or 185.196.8.123)..." class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-mono w-72">
+            <button onclick="lookupThreatIndicator()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold">Investigate</button>
+          </div>
+
+          <div id="threatLookupResult" class="p-4 rounded-xl bg-slate-950/80 border border-purple-900/30 text-xs font-mono hidden">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TAB 7: UNIFIED LOGS & HISTORY (DEDICATED)                           -->
+      <!-- =================================================================== -->
+      <div id="view-history" class="hidden space-y-6">
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="font-bold text-base text-white flex items-center">
+                Security Activity Record Book (Historical Logs)
+                <span class="tooltip-box"><span class="help-icon">?</span><span class="tooltip-text"><b>Audit Log</b>: Complete audit trail of detected anomalies, blocked websites, and network port sweeps.</span></span>
+              </h3>
+              <p class="text-xs text-slate-400">Review historical port scans, website queries, and multi-agent security incidents</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <button onclick="switchHistorySubTab('incidents')" id="hsub-incidents" class="px-3 py-1 rounded-lg bg-purple-600/30 text-purple-300 border border-purple-500/40">Security Incidents</button>
+              <button onclick="switchHistorySubTab('scans')" id="hsub-scans" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700">Port Scans</button>
+              <button onclick="switchHistorySubTab('alerts')" id="hsub-alerts" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700">Website Alerts</button>
+            </div>
+          </div>
+
+          <div id="historyTableContainer" class="overflow-x-auto rounded-xl border border-slate-800">
+            <!-- Dynamic table inserted here -->
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- SECURITY GUIDE & JARGON BUSTER MODAL                                -->
+  <!-- =================================================================== -->
+  <div id="glossaryModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-3xl max-h-[85vh] rounded-2xl border border-purple-500/40 flex flex-col shadow-2xl overflow-hidden bg-[#0d1322]">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center text-base">
+            📖
+          </div>
+          <div>
+            <h2 class="font-bold text-base text-white">Security Guide & Jargon Buster</h2>
+            <p class="text-xs text-slate-400">Clear, plain-English explanations of Veilguard's cybersecurity terms and tools</p>
+          </div>
+        </div>
+        <button onclick="closeGlossaryModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold transition">
+          ✕
+        </button>
+      </div>
+
+      <!-- Search Input -->
+      <div class="px-6 py-3 border-b border-slate-800/80 bg-slate-950/40">
+        <input type="text" id="glossarySearchInput" oninput="filterGlossary()" placeholder="🔍 Type a term to filter (e.g. hash, lolbas, cve, sinkhole, socket)..." class="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-purple-500 font-sans">
+      </div>
+
+      <!-- Scrollable Glossary Terms -->
+      <div id="glossaryTermsContainer" class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Term 1: SHA-256 Hash -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="sha256 hash digital fingerprint binary forensic checksum file">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-purple-300 flex items-center gap-2">
+              <span>🧬</span> Digital Fingerprint (SHA-256 Hash)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 text-[10px] font-bold uppercase">Endpoint Defense</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> A 64-character unique code computed mathematically from an executable file. Think of it as the file's digital DNA.</p>
+          <p class="text-slate-400"><b>Why it matters:</b> If a hacker alters even a single line of code in a program or disguises malware as a safe file (like <code>calc.exe</code>), its hash changes completely. Security tools check this hash against global antivirus databases to instantly spot known viruses.</p>
+        </div>
+
+        <!-- Term 2: 0.0.0.0 Hosts Sinkhole -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="sinkhole 0.0.0.0 hosts dns block website domain web url">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-rose-300 flex items-center gap-2">
+              <span>🛡️</span> Website Sinkhole (0.0.0.0 Hosts Block)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 text-[10px] font-bold uppercase">Web Protection</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> A technique that maps dangerous website addresses to <code>0.0.0.0</code> (a dead-end address that goes nowhere) right inside Windows.</p>
+          <p class="text-slate-400"><b>Why it matters:</b> It protects you at the operating system level. Even if you accidentally click a malicious link in an email or a browser, Windows will refuse to connect, protecting you from malware downloads and credential theft.</p>
+        </div>
+
+        <!-- Term 3: LOLBAS Anomaly -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="lolbas anomaly living off the land powershell cmd script parent child">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-amber-300 flex items-center gap-2">
+              <span>🚨</span> LOLBAS Anomaly (Living-Off-The-Land)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[10px] font-bold uppercase">Hacker Detection</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> "Living Off The Land" is when attackers use legitimate built-in Windows tools (like <code>powershell.exe</code> or <code>cmd.exe</code>) to do their dirty work instead of downloading their own suspicious files.</p>
+          <p class="text-slate-400"><b>Why it matters:</b> Veilguard detects when a non-technical user app (like Microsoft Word, Excel, or a Web Browser) secretly launches a command prompt in the background. That almost always indicates a malicious document or macro attack.</p>
+        </div>
+
+        <!-- Term 4: CVE & CVSS -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="cve cvss vulnerability exploit flaw security bug nvd">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-cyan-300 flex items-center gap-2">
+              <span>🎯</span> Security Vulnerabilities (CVE & CVSS)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px] font-bold uppercase">Vulnerability Mgmt</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> <b>CVE</b> stands for <i>Common Vulnerabilities and Exposures</i> — an official international catalog of known software bugs. <b>CVSS</b> is the 0–10 score that rates how severe the flaw is (9.0+ is Critical).</p>
+          <p class="text-slate-400"><b>Why it matters:</b> When Veilguard scans open ports, it checks if the software running on them has known CVEs. If it does, hackers can exploit that flaw unless you update or patch the software.</p>
+        </div>
+
+        <!-- Term 5: Sockets (ESTABLISHED vs LISTEN) -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="socket established listen port network connection tcp udp">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-emerald-300 flex items-center gap-2">
+              <span>🌐</span> Active Sockets (ESTABLISHED vs LISTEN)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 text-[10px] font-bold uppercase">Network Flow</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> A socket is a digital communication pipeline between an app on your computer and an outside server.</p>
+          <p class="text-slate-400"><b>States explained:</b><br>
+          • <b>ESTABLISHED:</b> An app is actively exchanging data with a remote server right now.<br>
+          • <b>LISTEN:</b> An app has opened a port and is waiting like an open door for incoming connections (like a web server or game host).</p>
+        </div>
+
+        <!-- Term 6: Suspicious / Untrusted Path -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="path suspicious directory temp appdata untrusted folder">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-rose-300 flex items-center gap-2">
+              <span>📁</span> Untrusted Path / Suspicious Directory
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 text-[10px] font-bold uppercase">Malware Hiding Spot</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> Legitimate installed software almost always runs from <code>C:\Program Files</code> or <code>C:\Windows\System32</code>.</p>
+          <p class="text-slate-400"><b>Why it matters:</b> Malware does not have administrator permission to install in Program Files, so it almost always hides in <code>AppData\Local\Temp</code> or user profile folders. Veilguard flags any network-connected app running from these temporary hiding places.</p>
+        </div>
+
+        <!-- Term 7: Abuse.ch Feeds (URLhaus & ThreatFox) -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="abuse.ch urlhaus threatfox feeds botnet c2 intelligence malware">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-indigo-300 flex items-center gap-2">
+              <span>⚡</span> Threat Feeds (Abuse.ch URLhaus & ThreatFox)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-bold uppercase">Threat Intelligence</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> Global, open cybersecurity threat sharing projects run by the Bern University of Applied Sciences in Switzerland.</p>
+          <p class="text-slate-400"><b>Feed types:</b><br>
+          • <b>URLhaus:</b> Over 13,000 active websites currently distributing malware payloads.<br>
+          • <b>ThreatFox:</b> Over 43,000 Command and Control (C2) servers that infected computers communicate with.</p>
+        </div>
+
+        <!-- Term 8: System Risk Score -->
+        <div class="glossary-item p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5" data-keywords="risk score threat meter composite health">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-emerald-300 flex items-center gap-2">
+              <span>📊</span> System Risk Meter (0–100)
+            </h4>
+            <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 text-[10px] font-bold uppercase">Health Metric</span>
+          </div>
+          <p class="text-slate-300"><b>What it is:</b> A composite 0–100 score calculated by correlating alerts across all Veilguard monitors.</p>
+          <p class="text-slate-400"><b>How to interpret:</b><br>
+          • <b>0–39 (Secure - Green):</b> Healthy status. All running apps are in trusted paths with clean reputations.<br>
+          • <b>40–74 (Elevated - Amber):</b> Caution. An app is running from a temp folder or connecting to an unusual port.<br>
+          • <b>75–100 (Critical - Red):</b> Action required. Active malware, LOLBAS anomaly, or known botnet communication detected.</p>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs text-slate-400">
+        <span>Need more help? Every feature in Veilguard includes an interactive <b>?</b> tooltip.</span>
+        <button onclick="closeGlossaryModal()" class="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold transition">
+          Close Guide
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+    </main>
+  </div>
+
+  <!-- JAVASCRIPT: UNIFIED LOGIC & API HOOKS -->
+  <script>
+    let lastBytesSent = 0;
+    let lastBytesRecv = 0;
+    let lastTime = 0;
+    let currentInspectedPid = null;
+
+    let isBoostActive = false;
+
+    // Tab switching
+    function switchTab(tabId) {
+      const tabs = ['optimizer', 'scanner', 'network', 'dns', 'processes', 'threats', 'history'];
+      tabs.forEach(t => {
+        const view = document.getElementById(`view-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (view) view.classList.add('hidden');
+        if (btn) {
+          btn.className = 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-800/50 hover:text-white';
+        }
+      });
+
+      const activeView = document.getElementById(`view-${tabId}`);
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeView) activeView.classList.remove('hidden');
+      if (activeBtn) {
+        activeBtn.className = 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition bg-purple-600/20 text-purple-300 border border-purple-500/30';
+      }
+
+      if (tabId === 'optimizer') { pollOptimizerStatus(); loadOptimizerApps(); }
+      if (tabId === 'network') loadSockets();
+      if (tabId === 'processes') refreshProcesses();
+      if (tabId === 'dns') { loadBlockedDomains(); loadDnsVisits(); }
+      if (tabId === 'threats') loadThreatStats();
+      if (tabId === 'history') switchHistorySubTab('incidents');
+    }
+
+    // TAB 1: GAME OPTIMIZER API
+    async function pollOptimizerStatus() {
+      try {
+        const res = await fetch('/api/optimizer/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // CPU Metric
+        const cpu = data.cpu_percent || 0;
+        const cpuEl = document.getElementById('optCpuPercent');
+        if (cpuEl) cpuEl.innerText = cpu.toFixed(1) + '%';
+        const cpuBar = document.getElementById('optCpuBar');
+        if (cpuBar) cpuBar.style.width = Math.min(100, Math.max(5, cpu)) + '%';
+        const cpuTag = document.getElementById('cpuStatusTag');
+        if (cpuTag && cpuBar) {
+          if (cpu > 70) {
+            cpuTag.innerText = 'HIGH LOAD';
+            cpuTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-400';
+            cpuBar.className = 'bg-rose-500 h-full rounded-full transition-all duration-500';
+          } else if (cpu > 35) {
+            cpuTag.innerText = 'MODERATE';
+            cpuTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400';
+            cpuBar.className = 'bg-amber-500 h-full rounded-full transition-all duration-500';
+          } else {
+            cpuTag.innerText = 'OPTIMAL';
+            cpuTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400';
+            cpuBar.className = 'bg-gradient-to-r from-emerald-500 to-cyan-400 h-full rounded-full transition-all duration-500';
+          }
+        }
+
+        // RAM Metric
+        const ram = data.ram || {};
+        const freeGb = ((ram.free_mb || 0) / 1024).toFixed(1);
+        const usedGb = ((ram.used_mb || 0) / 1024).toFixed(1);
+        const totalGb = ((ram.total_mb || 0) / 1024).toFixed(1);
+        const ramPct = ram.percent || 0;
+
+        const ramFreeEl = document.getElementById('optRamFree');
+        if (ramFreeEl) ramFreeEl.innerText = freeGb;
+        const ramBar = document.getElementById('optRamBar');
+        if (ramBar) ramBar.style.width = Math.min(100, Math.max(5, ramPct)) + '%';
+        const ramUsedEl = document.getElementById('optRamUsedLabel');
+        if (ramUsedEl) ramUsedEl.innerText = `${usedGb} GB / ${totalGb} GB (${ramPct.toFixed(0)}%)`;
+
+        // Power Plan & Lifetime Freed
+        const powerPlanEl = document.getElementById('optPowerPlanLabel');
+        if (powerPlanEl) powerPlanEl.innerText = data.power_plan || 'Standard';
+        const lifetimeEl = document.getElementById('lifetimeRamFreed');
+        if (lifetimeEl) lifetimeEl.innerText = (data.memory_freed_total_mb || 0).toLocaleString() + ' MB';
+
+        // Silent Mode / DND
+        const silentTag = document.getElementById('silentModeTag');
+        const dndText = document.getElementById('dndStatusText');
+        if (silentTag && dndText) {
+          if (data.silent_mode) {
+            silentTag.innerText = 'DND ACTIVE';
+            silentTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400';
+            dndText.innerText = 'Toasts Muted for Games';
+            dndText.className = 'text-emerald-400 font-mono text-[11px]';
+          } else {
+            silentTag.innerText = 'DND OFF';
+            silentTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+            dndText.innerText = 'Normal Alerts';
+            dndText.className = 'text-slate-400 font-mono text-[11px]';
+          }
+        }
+
+        // Active Game Banner
+        const gameBanner = document.getElementById('activeGameBanner');
+        const games = data.running_games || [];
+        if (gameBanner) {
+          if (games.length > 0) {
+            gameBanner.classList.remove('hidden');
+            gameBanner.innerText = `🎮 Active: ${games[0].title} (${games[0].exe})`;
+          } else {
+            gameBanner.classList.add('hidden');
+          }
+        }
+
+        // Boost Hero State
+        isBoostActive = data.is_boosted;
+        const heroCard = document.getElementById('boostHeroCard');
+        const boostBadge = document.getElementById('boostBadge');
+        const boostBtn = document.getElementById('boostMainBtn');
+        const boostBtnText = document.getElementById('boostBtnText');
+
+        if (heroCard && boostBadge && boostBtn && boostBtnText) {
+          if (isBoostActive) {
+            heroCard.className = 'glass-card p-6 rounded-3xl border border-emerald-500/50 relative overflow-hidden transition-all duration-500 bg-gradient-to-r from-[#0d1d1f] via-[#091f24] to-[#0c182d] shadow-2xl shadow-emerald-500/10';
+            boostBadge.innerText = '🔥 Ultra Boost Active';
+            boostBadge.className = 'text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse';
+            boostBtn.className = 'px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-500 hover:from-emerald-500 hover:to-cyan-400 text-white font-bold text-sm shadow-xl shadow-emerald-600/30 transition transform active:scale-95 flex items-center justify-center gap-2';
+            boostBtnText.innerText = 'Restore Normal Mode';
+          } else {
+            heroCard.className = 'glass-card p-6 rounded-3xl border border-purple-500/30 relative overflow-hidden transition-all duration-500 bg-gradient-to-r from-[#121128] via-[#0d1326] to-[#0a1b24]';
+            boostBadge.innerText = 'Ready to Boost';
+            boostBadge.className = 'text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40';
+            boostBtn.className = 'px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-bold text-sm shadow-xl shadow-purple-600/30 transition transform active:scale-95 flex items-center justify-center gap-2';
+            boostBtnText.innerText = 'Engage Ultra Game Boost';
+          }
+        }
+
+      } catch (err) {}
+    }
+
+    async function toggleGameBoost() {
+      const endpoint = isBoostActive ? '/api/optimizer/restore' : '/api/optimizer/boost';
+      try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        const data = await res.json();
+        if (data.is_boosted) {
+          alert(`🚀 Ultra Game Boost Engaged!\n• Power Plan: Ultimate/High Performance\n• RAM Freed: ${data.ram_freed_mb || 0} MB\n• DNS Latency: Flushed & Optimized\n• Notifications: Muted for Gaming`);
+        } else {
+          alert('Game Boost deactivated. Restored normal system profile.');
+        }
+        pollOptimizerStatus();
+        loadOptimizerApps();
+      } catch (err) {
+        alert('Failed to toggle game boost.');
+      }
+    }
+
+    async function triggerRamClean() {
+      try {
+        const res = await fetch('/api/optimizer/clean_ram', { method: 'POST' });
+        const data = await res.json();
+        const r = data.result || {};
+        alert(`⚡ Working-Set RAM Purge Complete!\n• Freed: ${r.freed_mb || 0} MB physical RAM\n• Processes Trimmed: ${r.processes_trimmed || 0}\n• Available Memory: ${((r.available_mb || 0)/1024).toFixed(1)} GB`);
+        pollOptimizerStatus();
+        loadOptimizerApps();
+      } catch (err) {
+        alert('RAM purge failed.');
+      }
+    }
+
+    async function triggerDnsFlush() {
+      try {
+        await fetch('/api/unblock_all', { method: 'POST' });
+        alert('🌐 DNS cache successfully flushed! Network latency route cleared.');
+      } catch (err) {
+        alert('DNS flush failed.');
+      }
+    }
+
+    async function loadOptimizerApps() {
+      const tbody = document.getElementById('optimizerAppsTableBody');
+      if (!tbody) return;
+      try {
+        const res = await fetch('/api/optimizer/apps');
+        const data = await res.json();
+        const apps = data.apps || [];
+        if (!apps.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-emerald-400">✨ Clean System: No heavy background memory eaters detected. Ready for gaming!</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = apps.map(a => `
+          <tr class="hover:bg-slate-900/60 transition">
+            <td class="py-2.5 px-4 text-slate-400">${a.pid}</td>
+            <td class="py-2.5 px-4 font-semibold text-white">${a.name}</td>
+            <td class="py-2.5 px-4 text-amber-300 font-bold">${a.memory_mb} MB</td>
+            <td class="py-2.5 px-4 text-slate-300">${a.cpu_percent || 0.0}%</td>
+            <td class="py-2.5 px-4 text-right">
+              <button onclick="terminateOptimizerApp(${a.pid}, '${a.name}')" class="px-2.5 py-1 rounded bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition">
+                Close App
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-rose-400">Failed to load background apps.</td></tr>';
+      }
+    }
+
+    async function terminateOptimizerApp(pid, name) {
+      if (!confirm(`Close background application ${name} (PID ${pid}) to free up memory?`)) return;
+      try {
+        const res = await fetch('/api/optimizer/terminate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ pid: pid })
+        });
+        const data = await res.json();
+        alert(data.message || (data.success ? 'App closed.' : data.error));
+        loadOptimizerApps();
+        pollOptimizerStatus();
+      } catch (err) {
+        alert('Failed to terminate app.');
+      }
+    }
+
+    // Telemetry Poller (Executive Stats & Bandwidth)
+    async function pollTelemetry() {
+      try {
+        const resStats = await fetch('/api/stats');
+        if (resStats.ok) {
+          const stats = await resStats.json();
+          document.getElementById('socketCount').innerText = stats.active_sockets || 0;
+          document.getElementById('blockedCount').innerText = stats.blocked_domains_count || 0;
+          const threatStr = (stats.threat_indicators || 57135).toLocaleString();
+          document.getElementById('threatIndicatorCount').innerText = threatStr + ' Indicators';
+          document.getElementById('tileThreatCount').innerText = threatStr;
+          document.getElementById('sidebarThreatCount').innerText = threatStr;
+
+          const score = stats.risk_score || 0;
+          const label = document.getElementById('systemRiskLabel');
+          const bar = document.getElementById('systemRiskBar');
+          bar.style.width = Math.max(5, score) + '%';
+          if (score >= 75) {
+            label.innerText = `${score}/100 (CRITICAL)`;
+            label.className = 'font-bold text-rose-400 ml-1';
+            bar.className = 'h-full bg-rose-500 rounded-full transition-all duration-500';
+          } else if (score >= 40) {
+            label.innerText = `${score}/100 (ELEVATED)`;
+            label.className = 'font-bold text-amber-400 ml-1';
+            bar.className = 'h-full bg-amber-500 rounded-full transition-all duration-500';
+          } else {
+            label.innerText = `${score}/100 (SECURE)`;
+            label.className = 'font-bold text-emerald-400 ml-1';
+            bar.className = 'h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full transition-all duration-500';
+          }
+        }
+
+        const resNet = await fetch('/api/network');
+        if (resNet.ok) {
+          const net = await resNet.json();
+          document.getElementById('packetCount').innerText = (net.total_packets || 0).toLocaleString();
+
+          if (lastTime > 0) {
+            const dt = net.timestamp - lastTime;
+            if (dt > 0) {
+              const deltaBytes = (net.bytes_sent + net.bytes_recv) - (lastBytesSent + lastBytesRecv);
+              const kbps = Math.max(0, (deltaBytes / 1024) / dt).toFixed(1);
+              document.getElementById('bandwidthRate').innerText = kbps;
+              document.getElementById('currentBpsLabel').innerText = kbps + ' KB/s';
+              addWavePoint(parseFloat(kbps));
+            }
+          }
+
+          lastBytesSent = net.bytes_sent;
+          lastBytesRecv = net.bytes_recv;
+          lastTime = net.timestamp;
+        }
+
+      } catch (err) {
+        document.getElementById('connStatus').innerText = 'Reconnecting...';
+      }
+    }
+
+    // TAB 2: PORT SCANNER API
+    async function runPortScan() {
+      const target = document.getElementById('scanTargetInput').value.trim();
+      const range = document.getElementById('scanRangeInput').value;
+      const btn = document.getElementById('scanStartBtn');
+      const banner = document.getElementById('scanGeoBanner');
+      const tbody = document.getElementById('scanResultsBody');
+
+      if (!target) return alert('Target required');
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="animate-spin">🔄</span> Scanning...`;
+      tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-purple-300 font-mono"><div class="animate-pulse">Sweeping ports, identifying services, and querying NVD for CVEs...</div></td></tr>`;
+
+      try {
+        const res = await fetch('/api/scan/start', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ target: target, port_range: range })
+        });
+        const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = `<span>Start Scan</span>`;
+
+        if (!data.success) {
+          tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-rose-400">${data.error || 'Scan failed.'}</td></tr>`;
+          return;
+        }
+
+        // Show GeoIP
+        if (data.geolocation) {
+          const g = data.geolocation;
+          document.getElementById('geoIp').innerText = data.ip;
+          document.getElementById('geoHost').innerText = data.hostname || '—';
+          document.getElementById('geoLoc').innerText = `${g.flag || ''} ${g.city || 'Local'}, ${g.country || 'Host'}`;
+          document.getElementById('geoIsp').innerText = g.isp || 'Local Network';
+          banner.classList.remove('hidden');
+        }
+
+        const results = data.results || [];
+        if (!results.length) {
+          tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-emerald-400">Scan Complete: No open ports found on ${target}. Target is sealed.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = results.map(r => {
+          const riskColor = r.risk === 'CRITICAL' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : r.risk === 'HIGH' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+          const cveCount = (r.cves && r.cves.length) ? `<span class="text-rose-400 font-bold">${r.cves.length} CVEs</span>` : '<span class="text-emerald-400">None detected</span>';
+          return `
+            <tr class="hover:bg-slate-900/60 transition">
+              <td class="py-3 px-4 font-bold text-white">${r.port}</td>
+              <td class="py-3 px-4 text-slate-400">${r.proto.toUpperCase()}</td>
+              <td class="py-3 px-4 text-cyan-300 font-semibold">${r.service}</td>
+              <td class="py-3 px-4 text-slate-300">${r.product || '—'}</td>
+              <td class="py-3 px-4"><span class="px-2 py-0.5 rounded border text-[10px] font-bold ${riskColor}">${r.risk}</span></td>
+              <td class="py-3 px-4">${cveCount}</td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>Start Scan</span>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-rose-400">Scan request failed.</td></tr>`;
+      }
+    }
+
+    // TAB 3: SOCKETS API
+    async function loadSockets() {
+      const tbody = document.getElementById('socketsTableBody');
+      try {
+        const res = await fetch('/api/sockets');
+        const data = await res.json();
+        const sockets = data.sockets || [];
+        if (!sockets.length) {
+          tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-500">No active sockets retrieved.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = sockets.map(s => {
+          const flag = s.is_suspicious ? '<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">SUSPICIOUS</span>' : '<span class="text-slate-500">—</span>';
+          const statusColor = s.status === 'ESTABLISHED' ? 'text-emerald-400' : s.status === 'LISTEN' ? 'text-cyan-400' : 'text-slate-400';
+          return `
+            <tr class="hover:bg-slate-900/60 transition">
+              <td class="py-2.5 px-4 text-slate-400">${s.pid}</td>
+              <td class="py-2.5 px-4 font-semibold text-white">${s.name}</td>
+              <td class="py-2.5 px-4 font-bold ${statusColor}">${s.status}</td>
+              <td class="py-2.5 px-4 text-slate-300">${s.local}</td>
+              <td class="py-2.5 px-4 text-slate-300">${s.remote}</td>
+              <td class="py-2.5 px-4 text-right">${flag}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-rose-400">Failed to load sockets.</td></tr>`;
+      }
+    }
+
+    // TAB 4: SINKHOLE & DNS VISITS API
+    async function loadBlockedDomains() {
+      const list = document.getElementById('blockedDomainsList');
+      try {
+        const res = await fetch('/api/blocked');
+        const data = await res.json();
+        const blocks = data.active_hosts_blocks || [];
+        if (!blocks.length) {
+          list.innerHTML = '<div class="text-xs text-slate-500 italic p-4 text-center">No active website blocks. Hosts file is clean.</div>';
+          return;
+        }
+
+        list.innerHTML = blocks.map(dom => `
+          <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
+            <div>
+              <div class="font-semibold text-rose-300 font-mono text-sm">${dom}</div>
+              <div class="text-xs text-slate-400">Sinkhole: 0.0.0.0 • Firewall: Netsh Outbound Block Rule</div>
+            </div>
+            <button onclick="unblockDomain('${dom}')" class="px-3 py-1 rounded bg-slate-800 hover:bg-emerald-600/20 hover:text-emerald-300 text-xs font-medium text-slate-300 border border-slate-700 transition">
+              Unblock Domain
+            </button>
+          </div>
+        `).join('');
+      } catch (err) {
+        list.innerHTML = '<div class="text-xs text-rose-400 p-4">Failed to load blocked domains.</div>';
+      }
+    }
+
+    async function unblockDomain(domain) {
+      const res = await fetch('/api/unblock', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ domain: domain })
+      });
+      loadBlockedDomains();
+      pollTelemetry();
+    }
+
+    async function emergencyUnblockAll() {
+      if (!confirm('Emergency Reset: Flush DNS and unblock all domains in Windows hosts?')) return;
+      const res = await fetch('/api/unblock_all', { method: 'POST' });
+      const data = await res.json();
+      alert(`Reset completed: ${data.unblocked_count || 0} domains removed from hosts.`);
+      loadBlockedDomains();
+      pollTelemetry();
+    }
+
+    async function blockManualDomain() {
+      const dom = document.getElementById('manualBlockInput').value.trim();
+      if (!dom) return;
+      await fetch('/api/block', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ domain: dom, reason: 'Manual block via Web UI' })
+      });
+      document.getElementById('manualBlockInput').value = '';
+      loadBlockedDomains();
+      pollTelemetry();
+    }
+
+    async function loadDnsVisits() {
+      const tbody = document.getElementById('dnsVisitsTableBody');
+      try {
+        const res = await fetch('/api/dns/visits');
+        const data = await res.json();
+        const visits = data.visits || [];
+        if (!visits.length) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500">No DNS queries recorded yet.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = visits.map(v => {
+          const badge = v.is_blocked ? '<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">BLOCKED</span>' : '<span class="text-emerald-400">Safe</span>';
+          return `
+            <tr class="hover:bg-slate-900/60 transition">
+              <td class="py-2 px-4 text-slate-400">${v.timestamp.substring(11, 19)}</td>
+              <td class="py-2 px-4 font-semibold text-white">${v.domain}</td>
+              <td class="py-2 px-4 text-cyan-300">${v.process_name || '—'}</td>
+              <td class="py-2 px-4 text-slate-400">${v.pid || '—'}</td>
+              <td class="py-2 px-4 text-right">${badge}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-400">Failed to load DNS queries.</td></tr>`;
+      }
+    }
+
+    // TAB 5: PROCESS FORENSICS API
+    async function refreshProcesses() {
+      const tbody = document.getElementById('overviewProcessTable');
+      try {
+        const res = await fetch('/api/processes');
+        const data = await res.json();
+        const procs = data.processes || [];
+        if (!procs.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-500">No active network processes returned.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = procs.map(p => {
+          const score = p.risk_score || 0;
+          const scoreColor = score >= 75 ? 'bg-rose-500/20 text-rose-300' : score >= 40 ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300';
+          const hashShort = p.sha256 ? (p.sha256.substring(0, 14) + '...') : 'N/A';
+          const rep = p.file_reputation ? p.file_reputation.verdict_label : 'Clean';
+          const isSys = p.is_system_proc;
+
+          return `
+            <tr class="hover:bg-slate-900/60 transition">
+              <td class="py-3 px-4 text-slate-400">${p.pid}</td>
+              <td class="py-3 px-4 font-semibold text-white">${p.name}</td>
+              <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[11px] font-bold ${scoreColor}">${score}/100</span></td>
+              <td class="py-3 px-4 text-slate-400 text-[11px]">${hashShort}</td>
+              <td class="py-3 px-4 text-slate-400">${p.parent_name || '—'}</td>
+              <td class="py-3 px-4 text-emerald-400">${rep}</td>
+              <td class="py-3 px-4 text-right">
+                ${isSys ? '<span class="text-[11px] text-slate-500">Protected</span>' : `
+                  <button onclick="inspectProcessDirect('${p.pid}')" class="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px]">Inspect</button>
+                  <button onclick="terminateProcessDirect(${p.pid})" class="px-2 py-1 rounded bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 text-[11px] ml-1">Kill</button>
+                `}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-400">Failed to load processes.</td></tr>';
+      }
+    }
+
+    async function inspectTargetProcess() {
+      const target = document.getElementById('procInspectInput').value.trim();
+      if (target) inspectProcessDirect(target);
+    }
+
+    async function inspectProcessDirect(target) {
+      const card = document.getElementById('forensicCardResult');
+      try {
+        const res = await fetch('/api/inspect', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ target: target })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const f = data.forensics;
+          const rep = data.file_reputation;
+          currentInspectedPid = f.pid;
+
+          document.getElementById('fcName').innerText = f.name;
+          document.getElementById('fcPid').innerText = f.pid;
+          document.getElementById('fcExe').innerText = f.exe;
+          document.getElementById('fcParent').innerText = `${f.parent_name} (PID: ${f.ppid || '—'})`;
+          document.getElementById('fcMemory').innerText = f.memory_mb + ' MB';
+          document.getElementById('fcPathCheck').innerHTML = f.is_suspicious_path ? '<span class="text-rose-400 font-bold">YES (Temp / Cache Directory)</span>' : '<span class="text-emerald-400">No (Standard Program Files)</span>';
+          document.getElementById('fcAnomalyCheck').innerHTML = f.is_parent_anomaly ? '<span class="text-rose-400 font-bold">YES (LOLBAS Anomaly Detected)</span>' : '<span class="text-emerald-400">No</span>';
+          document.getElementById('fcHash').innerText = f.sha256 || 'N/A';
+          document.getElementById('fcVerdict').innerText = 'VirusTotal: ' + (rep ? rep.verdict_label : 'Clean');
+
+          // Actionable Human Recommendation Logic
+          const recBox = document.getElementById('fcRecommendation');
+          if (f.is_system_proc) {
+            recBox.className = 'mb-4 p-3.5 rounded-xl border text-xs font-sans bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+            recBox.innerHTML = '<b>🛡️ Verified Windows System Component:</b> This process is a protected operating system binary running from System32. Termination is disabled to protect Windows stability.';
+          } else if (f.is_parent_anomaly || (rep && rep.verdict === 'malicious')) {
+            recBox.className = 'mb-4 p-3.5 rounded-xl border text-xs font-sans bg-rose-500/15 border-rose-500/40 text-rose-300';
+            recBox.innerHTML = '<b>🚨 Immediate Action Recommended (High Risk):</b> A LOLBAS execution anomaly was detected or VirusTotal flagged this file hash as malicious. If this software is unrecognized, click <b>Terminate Process</b> immediately.';
+          } else if (f.is_suspicious_path) {
+            recBox.className = 'mb-4 p-3.5 rounded-xl border text-xs font-sans bg-amber-500/15 border-amber-500/40 text-amber-300';
+            recBox.innerHTML = '<b>⚠️ Caution Advised (Unusual Location):</b> This program is running from a temporary user directory (Temp / AppData) rather than Program Files. If you did not download and start this app yourself, you should terminate it.';
+          } else {
+            recBox.className = 'mb-4 p-3.5 rounded-xl border text-xs font-sans bg-slate-900 border-slate-700 text-slate-300';
+            recBox.innerHTML = '<b>✅ Standard Application:</b> Process is running from a recognized path with clean threat reputation. No immediate security action needed.';
+          }
+
+          card.classList.remove('hidden');
+          switchTab('processes');
+        } else {
+          alert(data.error || 'Inspection failed.');
+        }
+      } catch (err) {
+        alert('Inspection request failed.');
+      }
+    }
+
+    async function terminateProcessDirect(pid) {
+      if (!confirm(`Are you sure you want to terminate PID ${pid}?`)) return;
+      const res = await fetch('/api/terminate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ pid: pid })
+      });
+      const data = await res.json();
+      alert(data.message || (data.success ? 'Process terminated.' : 'Failed.'));
+      refreshProcesses();
+    }
+
+    async function terminateInspectedPid() {
+      if (currentInspectedPid) {
+        await terminateProcessDirect(currentInspectedPid);
+        document.getElementById('forensicCardResult').classList.add('hidden');
+      }
+    }
+
+    // Glossary Modal Controls
+    function openGlossaryModal() {
+      document.getElementById('glossaryModal').classList.remove('hidden');
+      document.getElementById('glossarySearchInput').value = '';
+      filterGlossary();
+      document.getElementById('glossarySearchInput').focus();
+    }
+
+    function closeGlossaryModal() {
+      document.getElementById('glossaryModal').classList.add('hidden');
+    }
+
+    function filterGlossary() {
+      const q = (document.getElementById('glossarySearchInput').value || '').toLowerCase().trim();
+      const items = document.querySelectorAll('.glossary-item');
+      items.forEach(item => {
+        const text = (item.innerText + ' ' + (item.getAttribute('data-keywords') || '')).toLowerCase();
+        if (!q || text.includes(q)) {
+          item.classList.remove('hidden');
+        } else {
+          item.classList.add('hidden');
+        }
+      });
+    }
+
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeGlossaryModal();
+    });
+    document.getElementById('glossaryModal').addEventListener('click', e => {
+      if (e.target.id === 'glossaryModal') closeGlossaryModal();
+    });
+
+    // TAB 6: THREAT INTELLIGENCE STUDIO API
+    async function loadThreatStats() {
+      try {
+        const res = await fetch('/api/threats/stats');
+        const data = await res.json();
+        const s = data.stats || {};
+        const byType = s.by_type || {};
+        document.getElementById('urlhausCount').innerText = (byType.malware || 13637).toLocaleString();
+        document.getElementById('threatfoxCount').innerText = (byType.c2 || 43498).toLocaleString();
+        document.getElementById('vtCacheCount').innerText = (s.cached_domains || 0) + (s.cached_file_hashes || 0);
+      } catch (err) {}
+    }
+
+    async function triggerThreatFeedSync() {
+      const btn = document.getElementById('syncFeedsBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="animate-spin">🔄</span> Syncing...`;
+      try {
+        const res = await fetch('/api/threats/sync', { method: 'POST' });
+        const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = `<span>Sync Live Feeds Now</span>`;
+        alert('Threat feeds synchronized successfully!');
+        loadThreatStats();
+        pollTelemetry();
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>Sync Live Feeds Now</span>`;
+        alert('Feed sync failed.');
+      }
+    }
+
+    async function lookupThreatIndicator() {
+      const query = document.getElementById('threatQueryInput').value.trim();
+      const type = document.querySelector('input[name="lookupType"]:checked').value;
+      const resultBox = document.getElementById('threatLookupResult');
+
+      if (!query) return alert('Enter target indicator');
+
+      resultBox.classList.remove('hidden');
+      resultBox.innerHTML = '<div class="text-purple-300 animate-pulse">Querying Threat Intelligence and VirusTotal engines...</div>';
+
+      try {
+        const res = await fetch('/api/threats/lookup', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ query: query, type: type })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          resultBox.innerHTML = `<div class="text-rose-400">${data.error || 'Lookup failed.'}</div>`;
+          return;
+        }
+
+        const r = data.result;
+        const vt = r.virustotal || {};
+        const intel = r.intel_match;
+        const vColor = vt.verdict === 'malicious' ? 'text-rose-400 font-bold' : vt.verdict === 'suspicious' ? 'text-amber-400 font-bold' : 'text-emerald-400';
+
+        resultBox.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+              <span class="text-white font-bold text-sm">${r.query} (${r.type.toUpperCase()})</span>
+              <span class="${vColor}">Verdict: ${vt.verdict_label || 'Clean'}</span>
+            </div>
+            <div>VirusTotal Engine Analysis: <span class="text-rose-400 font-bold">${vt.malicious || 0} malicious</span>, <span class="text-amber-400 font-bold">${vt.suspicious || 0} suspicious</span> out of ${vt.total_engines || 70} engines.</div>
+            <div>Abuse.ch Feed Status: ${intel ? `<span class="text-rose-400 font-bold">MATCH FOUND (${intel.source.toUpperCase()} - ${intel.threat_type.toUpperCase()})</span>` : '<span class="text-emerald-400">Not listed on live feeds (Clean)</span>'}</div>
+            ${r.geolocation ? `<div>GeoIP: ${r.geolocation.city || '—'}, ${r.geolocation.country || '—'} (ISP: ${r.geolocation.isp || '—'})</div>` : ''}
+          </div>
+        `;
+      } catch (err) {
+        resultBox.innerHTML = '<div class="text-rose-400">Threat lookup failed.</div>';
+      }
+    }
+
+    // TAB 7: UNIFIED LOGS & HISTORY
+    async function switchHistorySubTab(sub) {
+      ['incidents', 'scans', 'alerts'].forEach(s => {
+        const btn = document.getElementById(`hsub-${s}`);
+        if (btn) btn.className = s === sub ? 'px-3 py-1 rounded-lg bg-purple-600/30 text-purple-300 border border-purple-500/40' : 'px-3 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700';
+      });
+
+      const container = document.getElementById('historyTableContainer');
+      container.innerHTML = '<div class="py-6 text-center text-slate-500 font-mono">Loading history...</div>';
+
+      if (sub === 'incidents') {
+        const res = await fetch('/api/incidents');
+        const data = await res.json();
+        const items = data.incidents || [];
+        if (!items.length) {
+          container.innerHTML = '<div class="py-6 text-center text-slate-500 font-mono">No security incidents logged yet.</div>';
+          return;
+        }
+        container.innerHTML = `
+          <table class="w-full text-left text-xs text-slate-300 font-mono">
+            <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase border-b border-slate-800">
+              <tr>
+                <th class="py-2.5 px-4">Time</th>
+                <th class="py-2.5 px-4">Alert Level (Severity)</th>
+                <th class="py-2.5 px-4">Threat Risk</th>
+                <th class="py-2.5 px-4">App Responsible (PID)</th>
+                <th class="py-2.5 px-4">Incident Summary</th>
+                <th class="py-2.5 px-4 text-right">Automated Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/50">
+              ${items.map(inc => `<tr><td class="py-2.5 px-4 text-slate-400">${inc.timestamp.substring(0, 19)}</td><td class="py-2.5 px-4 font-bold ${inc.severity === 'CRITICAL' ? 'text-rose-400' : 'text-amber-400'}">${inc.severity}</td><td class="py-2.5 px-4">${inc.risk_score}/100</td><td class="py-2.5 px-4 text-white">${inc.process_name} (${inc.pid || '—'})</td><td class="py-2.5 px-4 text-slate-300">${inc.summary}</td><td class="py-2.5 px-4 text-right text-amber-300 font-semibold">${inc.action_taken}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (sub === 'scans') {
+        const res = await fetch('/api/scan/history');
+        const data = await res.json();
+        const items = data.scans || [];
+        if (!items.length) {
+          container.innerHTML = '<div class="py-6 text-center text-slate-500 font-mono">No port scans logged yet.</div>';
+          return;
+        }
+        container.innerHTML = `
+          <table class="w-full text-left text-xs text-slate-300 font-mono">
+            <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase border-b border-slate-800">
+              <tr>
+                <th class="py-2.5 px-4">Scan Time</th>
+                <th class="py-2.5 px-4">Target Host / IP</th>
+                <th class="py-2.5 px-4">Port #</th>
+                <th class="py-2.5 px-4">Service Type</th>
+                <th class="py-2.5 px-4">Known Flaws (CVEs)</th>
+                <th class="py-2.5 px-4 text-right">Geolocation</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/50">
+              ${items.map(s => `<tr><td class="py-2.5 px-4 text-slate-400">${s.scanned_at.substring(0, 19)}</td><td class="py-2.5 px-4 font-semibold text-white">${s.target} (${s.ip})</td><td class="py-2.5 px-4">${s.port}</td><td class="py-2.5 px-4 text-cyan-300">${s.service}</td><td class="py-2.5 px-4 font-bold ${s.is_vulnerable ? 'text-rose-400' : 'text-emerald-400'}">${s.is_vulnerable ? 'YES (VULNERABLE)' : 'Clean'}</td><td class="py-2.5 px-4 text-right text-slate-400">${s.city || '—'}, ${s.country || '—'}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (sub === 'alerts') {
+        const res = await fetch('/api/dns/alerts');
+        const data = await res.json();
+        const items = data.alerts || [];
+        if (!items.length) {
+          container.innerHTML = '<div class="py-6 text-center text-slate-500 font-mono">No website security alerts logged yet.</div>';
+          return;
+        }
+        container.innerHTML = `
+          <table class="w-full text-left text-xs text-slate-300 font-mono">
+            <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase border-b border-slate-800">
+              <tr>
+                <th class="py-2.5 px-4">Alert Time</th>
+                <th class="py-2.5 px-4">Blocked Domain</th>
+                <th class="py-2.5 px-4">Threat Category</th>
+                <th class="py-2.5 px-4">Danger Level</th>
+                <th class="py-2.5 px-4">Requesting App</th>
+                <th class="py-2.5 px-4 text-right">PID</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/50">
+              ${items.map(a => `<tr><td class="py-2.5 px-4 text-slate-400">${a.alert_time.substring(0, 19)}</td><td class="py-2.5 px-4 font-semibold text-rose-300">${a.domain}</td><td class="py-2.5 px-4">${a.threat_type}</td><td class="py-2.5 px-4 text-amber-400 font-bold">${a.threat_level}</td><td class="py-2.5 px-4 text-cyan-300">${a.process_name || '—'}</td><td class="py-2.5 px-4 text-right text-slate-400">${a.pid || '—'}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    // Canvas Live Waveform Animation (when canvas element exists)
+    const canvas = document.getElementById('trafficCanvas');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      let points = Array(50).fill(5);
+
+      function resizeCanvas() {
+        if (canvas.parentElement) {
+          canvas.width = canvas.parentElement.clientWidth;
+          canvas.height = canvas.parentElement.clientHeight;
+        }
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      function addWavePoint(kbps) {
+        points.shift();
+        const normalized = Math.min(95, Math.max(8, kbps * 1.5 + (Math.random() * 5)));
+        points.push(normalized);
+      }
+
+      function drawWave() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.lineWidth = 1;
+        for (let y = 0; y < canvas.height; y += 24) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, 'rgba(6, 182, 212, 0.4)');
+        grad.addColorStop(1, 'rgba(168, 85, 247, 0.0)');
+
+        ctx.beginPath();
+        const step = canvas.width / (points.length - 1);
+        ctx.moveTo(0, canvas.height);
+
+        points.forEach((val, i) => {
+          const x = i * step;
+          const y = canvas.height - (val / 100) * canvas.height;
+          ctx.lineTo(x, y);
+        });
+
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        points.forEach((val, i) => {
+          const x = i * step;
+          const y = canvas.height - (val / 100) * canvas.height;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        requestAnimationFrame(drawWave);
+      }
+      drawWave();
+    }
+
+    // Start Poller & Initial Tab Load
+    pollTelemetry();
+    pollOptimizerStatus();
+    loadOptimizerApps();
+    setInterval(pollTelemetry, 1500);
+    setInterval(pollOptimizerStatus, 2500);
+  </script>
+</body>
+</html>

@@ -459,6 +459,24 @@ class NetworkMonitor:
                 }
                 self.snapshots.append(snapshot)
 
+                # Forward alerts to Multi-Agent Security Coordinator
+                if alerts:
+                    try:
+                        from src.coordinator.security_coordinator import security_coordinator
+                        for a in alerts:
+                            security_coordinator.emit_event(
+                                event_type=a.alert_type,
+                                data={
+                                    "pid": a.pid,
+                                    "process_name": a.process_name,
+                                    "details": a.details,
+                                    "severity": a.severity,
+                                    "is_exfiltration": (a.alert_type == "exfiltration")
+                                }
+                            )
+                    except Exception:
+                        pass
+
                 if len(self.snapshots) > 1000:
                     self.snapshots = self.snapshots[-1000:]
 
